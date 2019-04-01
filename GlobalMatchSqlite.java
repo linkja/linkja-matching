@@ -36,11 +36,11 @@ import org.apache.commons.io.FileUtils;
 
 public class GlobalMatchSqlite {
 
-	private static Connection db;
-
+	private static final String SW_NAME    = "Global Patient Match";
+	private static final String SW_VERSION = " v1.0.beta";
 	private static String dbDirectory;
 	private static String dbName;
-	private static ResultSet resultSet = null;
+	private static Connection db;
 
 	private final static DateTimeFormatter dateTimeformat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	//private final static DateTimeFormatter dateTimeHL7format = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -85,6 +85,15 @@ public class GlobalMatchSqlite {
 	private static String tempMessage;
 	private static final String TempTableIdKey = "TempTableId";
 	private static final String TempTableTextKey = "TempTableText";
+	private static final String nullEntry = "NULL";
+	private static final String nullEntryDelim = "NULL|";
+	
+	private static final int logInfo = 0;		// normal log message
+	private static final int logWarning = 1;	// warning log message
+	private static final int logSevere = 2;		// severe log message
+	private static final int logTask = 3;		// begin task log message
+	private static final int logBegin = 4;		// begin section log message
+	private static final int logConfig = 5;		// config log message
 
 	private static Integer patGlobalIdCount = 0;
 	private static Map<Integer, List<Integer>> patGlobalIdMap = new HashMap<Integer, List<Integer>>(1000);
@@ -140,13 +149,13 @@ public class GlobalMatchSqlite {
 
 		String fullName = null;			// read hash files from input directory
 		tempMessage = "step " + step + ": reading input files from: " + inputDir;
-		writeLog( tempMessage );
+		writeLog( logBegin, tempMessage );
 		System.out.println( tempMessage );
 		
 		ArrayList<String> inputFiles = getFileNames1Dir(inputDir, inputFileNamePrefix, inputFileNameSuffix);	// go read files in directory
 		if (inputFiles == null || inputFiles.size() == 0) {
-			tempMessage = "***no input files found in directory " + inputDir;
-			writeLog( tempMessage );
+			tempMessage = "no input files found in directory " + inputDir;
+			writeLog(logWarning, tempMessage );
 			System.out.println( tempMessage );
 			return;
 		}
@@ -165,7 +174,7 @@ public class GlobalMatchSqlite {
 
 			// read input file
 			tempMessage = "processing hash file: " + inputFile1;
-			writeLog( tempMessage );
+			writeLog(logInfo, tempMessage );
 			System.out.println( tempMessage );
 			
 			File fileIn = new File(inputFile1);
@@ -182,29 +191,25 @@ public class GlobalMatchSqlite {
 					String lineIn = line.trim().replaceAll("\\s+", " ");	// reduce multiple spaces to single space
 					String[] splitLine = lineIn.split(delimComma);			// split incoming text
 
-					// check that primary data is valid
+					// check that primary data is valid  - site id, project id and pidhash
 					boolean validData = true;
-					if (splitLine[siteidIdx] == null || splitLine[siteidIdx].isEmpty()) {
+					if (splitLine[siteidIdx] == null || splitLine[siteidIdx].isEmpty() || splitLine[siteidIdx].equals("NULL")) {
+						validData = false;
+					}
+					if (splitLine[projectidIdx] == null || splitLine[projectidIdx].isEmpty() || splitLine[projectidIdx].equals("NULL")) {
+						validData = false;
+					}
+					if (splitLine[pidhashIdx] == null || splitLine[pidhashIdx].isEmpty() || splitLine[pidhashIdx].equals("NULL")) {
 						validData = false;
 					}
 					if (splitLine[exceptFlagIdx] == null || splitLine[exceptFlagIdx].isEmpty()) {
 						validData = false;
 					}
+					/* columns hash1 and up can be null or empty
 					if (splitLine[hash1Idx] == null || splitLine[hash1Idx].isEmpty() || splitLine[hash1Idx].equals("NULL")) {
 						validData = false;
 					}
-					if (splitLine[hash2Idx] == null || splitLine[hash2Idx].isEmpty() || splitLine[hash2Idx].equals("NULL")) {
-						validData = false;
-					}
-					if (splitLine[hash5Idx] == null || splitLine[hash5Idx].isEmpty() || splitLine[hash5Idx].equals("NULL")) {
-						validData = false;
-					}
-					if (splitLine[hash9Idx] == null || splitLine[hash9Idx].isEmpty() || splitLine[hash9Idx].equals("NULL")) {
-						validData = false;
-					}
-					if (splitLine[hash10Idx] == null || splitLine[hash10Idx].isEmpty() || splitLine[hash10Idx].equals("NULL")) {
-						validData = false;
-					}
+					*/
 					if (!validData) {
 						writeInvalidData( invalidDataFile, lineIn );	// write out data for later
 						continue;			// skip to next record
@@ -245,7 +250,7 @@ public class GlobalMatchSqlite {
 			}
 
 			tempMessage = "read " + recordsRead + " lines from: " + inputFile1;
-			writeLog( tempMessage );
+			writeLog(logInfo, tempMessage );
 			System.out.println( tempMessage );
 			// end read input file
 
@@ -259,8 +264,8 @@ public class GlobalMatchSqlite {
 					e.printStackTrace();
 				}
 				if (!fileMoved) {
-					tempMessage = "***file not moved to processed dir: " + fullName;
-					writeLog( tempMessage );
+					tempMessage = "file not moved to processed dir: " + fullName;
+					writeLog(logSevere, tempMessage );
 					System.out.println( tempMessage );
 				}
 			}
@@ -269,6 +274,9 @@ public class GlobalMatchSqlite {
 
 	// step 2 run match rules as indicated
 	private static void runMatchRules(int step) {
+		tempMessage = "step " + step + ": Run patient match rule sequence " + matchSequence;
+		writeLog( logBegin, tempMessage );
+		System.out.println( tempMessage );
 		
 		assignPatientAliasGlobalIds();		// assign Global Ids to patient aliases first
 		
@@ -297,7 +305,7 @@ public class GlobalMatchSqlite {
 			}
 
 			tempMessage = "Processing Match Rule " + currentRule;
-			writeLog( tempMessage );
+			writeLog(logInfo, tempMessage );
 			System.out.println( tempMessage );
 			
 			switch (currentRule) {		
@@ -356,6 +364,8 @@ public class GlobalMatchSqlite {
 			default :
 			}
 			System.out.println("finished Match Rule " + currentRule);
+			//System.out.println("matching pats:");
+			//patGlobalIdMap.forEach((k, v) -> System.out.println((k + ":" + v)));	// print out - Java 8
 		}
 
 		assignMatchedGlobalIds();	// go assign global ids for matched patients
@@ -363,19 +373,20 @@ public class GlobalMatchSqlite {
 	}
 
 	private static void assignMatchedGlobalIds() {
+		int matchingPatGroups = 0;
 		int assignedGlobalIds = 0;
-		tempMessage = "***Assigning global ids to matching patients";
+		tempMessage = "Assigning global ids to matching patients";
 		System.out.println( tempMessage );
-		writeLog( tempMessage );
+		writeLog(logTask, tempMessage );
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		//patGlobalIdMap.forEach((k, v) -> System.out.println((k + ":" + v)));	// print out - Java 8
 		
 		for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each group
 
 			//Integer patGlobalIdMapEntry = entry.getKey();
-			List<Integer> patList = entry.getValue();			// get list of matching pats
+			List<Integer> patList = entry.getValue();			// get list of matching pats in this group
+			matchingPatGroups++;								// increment count of matching groups
 
 			int patCount = 0;
 			StringBuilder sb1 = new StringBuilder();
@@ -391,16 +402,18 @@ public class GlobalMatchSqlite {
 			String sql1 = "SELECT globalId FROM GlobalMatch WHERE id IN (" + sb1.toString() + ")";
 			try ( PreparedStatement pstmt1 = db.prepareStatement(sql1)) {	// check if any already have global id
 				pstmt1.setFetchSize(100);				//number of rows to be fetched when needed
-				resultSet = pstmt1.executeQuery();
+				ResultSet resultSet = pstmt1.executeQuery();
 				while (resultSet.next()) {				// get max global Id from this group
 
 					Integer currGlobalId = resultSet.getInt("globalId");
 					if (currGlobalId > 0) {
 						if (currGlobalId < patAliasGlobalIdCutoff) {
 							maxGlobalId = currGlobalId;		// if alias patient global id use that for all
+							//System.out.println("found patient alias global id: " + currGlobalId);
 							break;
 						} else if (maxGlobalId < currGlobalId) {
 							maxGlobalId = currGlobalId;
+							//System.out.println("found patient global id: " + currGlobalId);
 						}
 					}
 				}
@@ -427,15 +440,18 @@ public class GlobalMatchSqlite {
 				}
 			}
 		}
-		tempMessage = "Assigned " + assignedGlobalIds + " global ids to matching patients";
+		tempMessage = "Found " + matchingPatGroups + " matching patient groups";
+		writeLog(logInfo, tempMessage );
 		System.out.println( tempMessage );
-		writeLog( tempMessage );
+		tempMessage = "Assigned " + assignedGlobalIds + " new global ids to matching patients";
+		writeLog(logInfo, tempMessage );
+		System.out.println( tempMessage );
 	}
 
 	private static void assignUnMatchedGlobalIds() {
 		int unAssignedGlobalIds = 0;
-		tempMessage = "***Assigning global ids to unmatched patients";
-		writeLog( tempMessage );
+		tempMessage = "Assigning global ids to unmatched patients";
+		writeLog(logTask, tempMessage );
 		System.out.println( tempMessage );
 		
 		createTempTableIdKey();		// go create temp table to hold pats without globalId
@@ -443,7 +459,7 @@ public class GlobalMatchSqlite {
 		String sql3 = "SELECT id FROM GlobalMatch WHERE globalId = 0";	// get pats without globalId
 		try ( PreparedStatement pstmt1 = db.prepareStatement(sql3)) {	
 			pstmt1.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt1.executeQuery();
+			ResultSet resultSet = pstmt1.executeQuery();
 			while (resultSet.next()) {				// get row ids of unassigned patients, save to temp 
 				Integer rowId = resultSet.getInt("id");
 				Integer nextGlobalId = globalId.incrementAndGet();	// assign next global id
@@ -456,9 +472,9 @@ public class GlobalMatchSqlite {
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
 		}
-		tempMessage = "Assigned " + unAssignedGlobalIds + " global ids to patients without global ids";
+		tempMessage = "Assigning " + unAssignedGlobalIds + " global ids to patients without global ids";
+		writeLog(logInfo, tempMessage );
 		System.out.println( tempMessage );
-		writeLog( tempMessage );
 
 		// update GlobalMatch.globalId using rowId, globalId from TempTable
 		String sql2 = "UPDATE GlobalMatch SET globalId ="
@@ -481,15 +497,15 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		tempMessage = "***patient alias match starting";
-		writeLog( tempMessage );
+		tempMessage = "patient alias match starting";
+		writeLog(logBegin, tempMessage );
 		System.out.println( tempMessage );
 
 		// query database
 		String sqlQuery = "SELECT pidhash,siteId,projectId,id FROM GlobalMatch INDEXED BY pidindex";	// create prepared statement
 		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt.executeQuery();		// executeQuery
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery
 			int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
 			while (resultSet.next()) {
 
@@ -498,7 +514,7 @@ public class GlobalMatchSqlite {
 				for (int k = 1; k < columnCount; k++) {		//make up key to compare, all but last column
 					sb1.append(resultSet.getString(k) + delimPipe);
 				}
-				String currentPat = sb1.toString();			// get all parts to key for pat
+				String currentPat = sb1.toString();			// get all parts to key for pat, all required columns, should be non null
 				//currRowId = resultSet.getInt("id");		// get row id in last column
 
 				if (currentPat.equals(lastPat)) {			//if key is =, means patients match
@@ -516,7 +532,7 @@ public class GlobalMatchSqlite {
 			e1.printStackTrace();	
 		}
 		tempMessage = "records processed: " +recordsRead+ "  pat alias matches found: " +patAliasMapCount;
-		writeLog( tempMessage );				// write out patient match keys
+		writeLog(logInfo, tempMessage );				// write out patient match keys
 		System.out.println( tempMessage );
 
 		Integer patAliasLastGlobalId = 0;
@@ -544,11 +560,11 @@ public class GlobalMatchSqlite {
 			patAliasGlobalIdCutoff = ((patAliasLastGlobalId + 100) /100) * 100;		// round up to nearest 100
 			globalId = new AtomicInteger(patAliasGlobalIdCutoff);	// set regular global id above last alias global id
 			tempMessage = "last pat alias Global Id: " +patAliasLastGlobalId+ ", setting base Global Id to: " +patAliasGlobalIdCutoff;
-			writeLog( tempMessage );				// write out 
+			writeLog(logInfo, tempMessage );				// write out 
 			System.out.println( tempMessage );
 		} else {
-			tempMessage = "no pat alias Global Ids assigned, base Global Id is at: " + globalId.get(); globalId.get(); // get (but don't increment)
-			writeLog( tempMessage );				// write out 
+			tempMessage = "no pat alias Global Ids assigned, base Global Id is at: " + globalId.get();	// get (but don't increment)
+			writeLog(logInfo, tempMessage );				// write out 
 			System.out.println( tempMessage );
 		}
 	}
@@ -571,8 +587,13 @@ public class GlobalMatchSqlite {
 				+ "FROM GlobalMatch INDEXED BY match0";					// create prepared statement
 		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt.executeQuery();		// executeQuery
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery
 			int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			StringBuilder sb0 = new StringBuilder();
+			for (int k = 1; k < columnCount; k++) {
+				sb0.append(nullEntryDelim);				// create an all column null entry
+			}
+			String nullKey = sb0.toString();
 			while (resultSet.next()) {
 
 				recordsRead++;
@@ -583,7 +604,10 @@ public class GlobalMatchSqlite {
 				currRowId = resultSet.getInt("id");		// get row id in last column
 				String currPat = sb1.toString();
 
-				if (currPat.equals(lastPat)) {
+				if (currPat.equals(nullKey)) {
+					currMatch = false;
+
+				} else if (currPat.equals(lastPat)) {
 					currMatch = true;
 					patientMatches++;
 					if (!lastMatch) {
@@ -605,9 +629,8 @@ public class GlobalMatchSqlite {
 				lastRowId = currRowId;
 
 				if ((recordsRead % 10000) == 0) {
-					// write out patient match keys so far
 					tempMessage = "Match Rule 0 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog( tempMessage );
+					writeLog(logInfo, tempMessage );		// write out patient match keys so far
 					System.out.println( tempMessage );
 				}
 			}
@@ -615,6 +638,9 @@ public class GlobalMatchSqlite {
 				addToGlobalIdGroup( currGlobalIdGroup );
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
+			tempMessage = "Match Rule 0 records processed: " + recordsRead + "  matches found: " + patientMatches;
+			writeLog(logInfo, tempMessage );		// write out patient match keys so far
+			System.out.println( tempMessage );
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -651,8 +677,13 @@ public class GlobalMatchSqlite {
 				+ "FROM GlobalMatch INDEXED BY match1";					// create prepared statement
 		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
 			int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			StringBuilder sb0 = new StringBuilder();
+			for (int k = 1; k < columnCount; k++) {
+				sb0.append(nullEntryDelim);				// create an all column null entry
+			}
+			String nullKey = sb0.toString();
 			while (resultSet.next()) {
 
 				recordsRead++;
@@ -660,9 +691,12 @@ public class GlobalMatchSqlite {
 				for (int k = 1; k < columnCount; k++) {		//make up key to compare, all but last column
 					sb1.append(resultSet.getString(k) + delimPipe);
 				}
-				currRowId = resultSet.getInt("id");		// get row id in last column
 				String currPat = sb1.toString();
-				if (currPat.equals(lastPat)) {
+				currRowId = resultSet.getInt("id");		// get row id in last column
+				
+				if (currPat.equals(nullKey)) {
+					currMatch = false;
+				} else if (currPat.equals(lastPat)) {
 					currMatch = true;
 					patientMatches++;
 					if (!lastMatch) {
@@ -684,7 +718,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 1 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog( tempMessage );				// write out patient match keys so far
+					writeLog(logInfo, tempMessage );				// write out patient match keys so far
 					System.out.println( tempMessage );
 				}
 			}
@@ -692,6 +726,9 @@ public class GlobalMatchSqlite {
 				addToGlobalIdGroup( currGlobalIdGroup );
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
+			tempMessage = "Match Rule 1 records processed: " + recordsRead + "  matches found: " + patientMatches;
+			writeLog(logInfo, tempMessage );				// write out patient match keys so far
+			System.out.println( tempMessage );
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -720,8 +757,13 @@ public class GlobalMatchSqlite {
 				+ "FROM GlobalMatch INDEXED BY match2";			// create prepared statement
 		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
 			int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			StringBuilder sb0 = new StringBuilder();
+			for (int k = 1; k < columnCount; k++) {
+				sb0.append(nullEntryDelim);				// create an all column null entry
+			}
+			String nullKey = sb0.toString();
 			while (resultSet.next()) {
 				recordsRead++;
 				StringBuilder sb1 = new StringBuilder();
@@ -731,7 +773,10 @@ public class GlobalMatchSqlite {
 				currRowId = resultSet.getInt("id");		// get row id in last column
 				String currPat = sb1.toString();
 
-				if (currPat.equals(lastPat)) {
+				if (currPat.equals(nullKey)) {
+					currMatch = false;
+
+				} else if (currPat.equals(lastPat)) {
 					currMatch = true;
 					patientMatches++;
 					if (!lastMatch) {
@@ -754,7 +799,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 2 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog( tempMessage );				// write out patient match keys so far
+					writeLog(logInfo, tempMessage );				// write out patient match keys so far
 					System.out.println( tempMessage );
 				}
 			}
@@ -762,6 +807,9 @@ public class GlobalMatchSqlite {
 				addToGlobalIdGroup( currGlobalIdGroup );
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
+			tempMessage = "Match Rule 2 records processed: " + recordsRead + "  matches found: " + patientMatches;
+			writeLog(logInfo, tempMessage );				// write out patient match keys so far
+			System.out.println( tempMessage );
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -790,20 +838,17 @@ public class GlobalMatchSqlite {
 				+ "FROM GlobalMatch INDEXED BY match3";		// create prepared statement
 		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
-			int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+			//int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			String nullKey = nullEntry;
 			while (resultSet.next()) {
-
 				recordsRead++;
-				StringBuilder sb1 = new StringBuilder();
-				for (int k = 1; k < columnCount; k++) {		//make up key to compare, all but last column
-					sb1.append(resultSet.getString(k) + delimPipe);
-				}
-				currRowId = resultSet.getInt("id");		// get row id in last column
-				String currPat = sb1.toString();
-				System.out.println("row: " + currRowId + " currPat: " + sb1);
+				String currPat = resultSet.getString("hash1");	// get pat
+				currRowId = resultSet.getInt("id");				// get row id in last column
 
-				if (currPat.equals(lastPat)) {
+				if (currPat.equals(nullKey)) {
+					currMatch = false;
+				} else if (currPat.equals(lastPat)) {
 					currMatch = true;
 					patientMatches++;
 					if (!lastMatch) {
@@ -826,7 +871,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 3 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog( tempMessage );				// write out patient match keys so far
+					writeLog(logInfo, tempMessage );				// write out patient match keys so far
 					System.out.println( tempMessage );
 				}
 			}
@@ -834,6 +879,9 @@ public class GlobalMatchSqlite {
 				addToGlobalIdGroup( currGlobalIdGroup );
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
+			tempMessage = "Match Rule 3 records processed: " + recordsRead + "  matches found: " + patientMatches;
+			writeLog(logInfo, tempMessage );				// write out patient match keys so far
+			System.out.println( tempMessage );
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -845,6 +893,7 @@ public class GlobalMatchSqlite {
 	}
 
 	private static void readGlobalMatchRule4(boolean keySame) {
+		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
@@ -857,12 +906,15 @@ public class GlobalMatchSqlite {
 					+ "FROM GlobalMatch INDEXED BY match4";		// create prepared statement
 			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+				ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
 				while (resultSet.next()) {
 					String hash1 = resultSet.getString("hash1");		// get data from this resultset row
 					String hash2 = resultSet.getString("hash2");
 					int rowId = resultSet.getInt("id");
 				
+					if (hash1.equals(nullEntry) || hash2.equals(nullEntry)) {
+						continue;					// skip to next if null entry
+					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash2, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
@@ -870,12 +922,12 @@ public class GlobalMatchSqlite {
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
 							while (rset9.next()) {
-								String tempName = rset9.getString("name");		// get data from this resultset row
+								//String tempName = rset9.getString("name");		// get data from this resultset row
 								int tempRowId = rset9.getInt("rowId");
-								System.out.println("found in temp: " + tempName + " " + tempRowId);
 								if (rowId != tempRowId) {
 									currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
-									currGlobalIdGroup.add(tempRowId);									
+									currGlobalIdGroup.add(tempRowId);
+									patientMatches++;
 								}
 							}
 							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -886,6 +938,9 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
+				tempMessage = "Match Rule 4 found: " + patientMatches + " patient matches";
+				writeLog(logInfo, tempMessage );		// write out patient matchs so far
+				System.out.println( tempMessage );
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -898,6 +953,7 @@ public class GlobalMatchSqlite {
 	}
 
 	private static void readGlobalMatchRule5(boolean keySame) {
+		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
@@ -910,11 +966,15 @@ public class GlobalMatchSqlite {
 					+ "FROM GlobalMatch INDEXED BY match5";		// create prepared statement
 			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+				ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
 				while (resultSet.next()) {
 					String hash1 = resultSet.getString("hash1");		// get data from this resultset row
 					String hash5 = resultSet.getString("hash5");
 					int rowId = resultSet.getInt("id");
+					
+					if (hash1.equals(nullEntry) || hash5.equals(nullEntry)) {
+						continue;					// skip to next if null entry
+					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash5, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
@@ -922,12 +982,12 @@ public class GlobalMatchSqlite {
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
 							while (rset9.next()) {
-								String tempName = rset9.getString("name");		// get data from this resultset row
+								//String tempName = rset9.getString("name");		// get data from this resultset row
 								int tempRowId = rset9.getInt("rowId");
-								System.out.println("found in temp: " + tempName + " " + tempRowId);
 								if (rowId != tempRowId) {
 									currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
-									currGlobalIdGroup.add(tempRowId);									
+									currGlobalIdGroup.add(tempRowId);
+									patientMatches++;
 								}
 							}
 							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -938,6 +998,9 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
+				tempMessage = "Match Rule 5 found: " + patientMatches + " patient matches";
+				writeLog(logInfo, tempMessage );		// write out patient matchs so far
+				System.out.println( tempMessage );
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -950,6 +1013,7 @@ public class GlobalMatchSqlite {
 	}
 
 	private static void readGlobalMatchRule6(boolean keySame) {
+		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
@@ -962,12 +1026,15 @@ public class GlobalMatchSqlite {
 					+ "FROM GlobalMatch INDEXED BY match6";		// create prepared statement
 			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				resultSet = pstmt.executeQuery();		// executeQuery
+				ResultSet resultSet = pstmt.executeQuery();		// executeQuery
 				while (resultSet.next()) {
 					String hash1 = resultSet.getString("hash1");		// get data from this resultset row
 					String hash9 = resultSet.getString("hash9");
 					int rowId = resultSet.getInt("id");
 
+					if (hash1.equals(nullEntry) || hash9.equals(nullEntry)) {
+						continue;					// skip to next if null entry
+					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash9, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
@@ -977,10 +1044,10 @@ public class GlobalMatchSqlite {
 							while (rset9.next()) {
 								//String tempName = rset9.getString("name");		// get data from this resultset row
 								int tempRowId = rset9.getInt("rowId");
-								//System.out.println("found in temp: " + tempName + " " + tempRowId);
 								if (rowId != tempRowId) {
 									currGlobalIdGroup.add(rowId);			// save ids of these 2  matching patients
-									currGlobalIdGroup.add(tempRowId);									
+									currGlobalIdGroup.add(tempRowId);
+									patientMatches++;
 								}
 							}
 							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -991,6 +1058,9 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
+				tempMessage = "Match Rule 6 found: " + patientMatches + " patient matches";
+				writeLog(logInfo, tempMessage );		// write out patient matchs so far
+				System.out.println( tempMessage );
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1003,6 +1073,7 @@ public class GlobalMatchSqlite {
 	}
 
 	private static void readGlobalMatchRule7(boolean keySame) {
+		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
@@ -1015,12 +1086,15 @@ public class GlobalMatchSqlite {
 					+ "FROM GlobalMatch INDEXED BY match7";		// create prepared statement
 			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+				ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
 				while (resultSet.next()) {
 					String hash1 = resultSet.getString("hash1");		// get data from this resultset row
 					String hash10 = resultSet.getString("hash10");
 					int rowId = resultSet.getInt("id");
 
+					if (hash1.equals(nullEntry) || hash10.equals(nullEntry)) {
+						continue;					// skip to next if null entry
+					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash10, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
@@ -1032,7 +1106,8 @@ public class GlobalMatchSqlite {
 								int tempRowId = rset9.getInt("rowId");
 								if (rowId != tempRowId) {
 									currGlobalIdGroup.add(rowId);			// save ids of these 2  matching patients
-									currGlobalIdGroup.add(tempRowId);									
+									currGlobalIdGroup.add(tempRowId);
+									patientMatches++;
 								}
 							}
 							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -1043,6 +1118,9 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
+				tempMessage = "Match Rule 7 found: " + patientMatches + " patient matches";
+				writeLog(logInfo, tempMessage );		// write out patient matchs so far
+				System.out.println( tempMessage );
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1072,19 +1150,17 @@ public class GlobalMatchSqlite {
 				+ "FROM GlobalMatch INDEXED BY match8";		// create prepared statement
 		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
-			int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+			//int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			String nullKey = nullEntry;
 			while (resultSet.next()) {
 
 				recordsRead++;
-				StringBuilder sb1 = new StringBuilder();
-				for (int k = 1; k < columnCount; k++) {		//make up key to compare, all but last column
-					sb1.append(resultSet.getString(k) + delimPipe);
-				}
-				currRowId = resultSet.getInt("id");		// get row id in last column
-				String currPat = sb1.toString();
-
-				if (currPat.equals(lastPat)) {
+				String currPat = resultSet.getString("hash3");	// get pat from this resultset row
+				currRowId = resultSet.getInt("id");				// get row id in last column
+				if (currPat.equals(nullKey)) {
+					currMatch = false;
+				} else if (currPat.equals(lastPat)) {
 					currMatch = true;
 					patientMatches++;
 					if (!lastMatch) {
@@ -1107,7 +1183,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 8 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog( tempMessage );				// write out patient match keys so far			
+					writeLog(logInfo, tempMessage );				// write out patient match keys so far			
 					System.out.println( tempMessage );
 				}
 			}
@@ -1115,6 +1191,9 @@ public class GlobalMatchSqlite {
 				addToGlobalIdGroup( currGlobalIdGroup );
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
+			tempMessage = "Match Rule 8 records processed: " + recordsRead + "  matches found: " + patientMatches;
+			writeLog(logInfo, tempMessage );				// write out patient match keys so far			
+			System.out.println( tempMessage );
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -1126,6 +1205,7 @@ public class GlobalMatchSqlite {
 	}
 
 	private static void readGlobalMatchRule9(boolean keySame) {
+		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
@@ -1138,12 +1218,15 @@ public class GlobalMatchSqlite {
 					+ "FROM GlobalMatch INDEXED BY match9";		// create prepared statement
 			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+				ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
 				while (resultSet.next()) {
 					String hash3 = resultSet.getString("hash3");		// get data from this resultset row
 					String hash4 = resultSet.getString("hash4");
 					int rowId = resultSet.getInt("id");
 					
+					if (hash3.equals(nullEntry) || hash4.equals(nullEntry)) {
+						continue;					// skip to next if null entry
+					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash4, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
@@ -1155,7 +1238,8 @@ public class GlobalMatchSqlite {
 								int tempRowId = rset9.getInt("rowId");
 								if (rowId != tempRowId) {
 									currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
-									currGlobalIdGroup.add(tempRowId);									
+									currGlobalIdGroup.add(tempRowId);
+									patientMatches++;
 								}
 							}
 							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -1166,6 +1250,9 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
+				tempMessage = "Match Rule 9 found: " + patientMatches + " patient matches";
+				writeLog(logInfo, tempMessage );		// write out patient matchs so far
+				System.out.println( tempMessage );
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1178,6 +1265,7 @@ public class GlobalMatchSqlite {
 	}
 
 	private static void readGlobalMatchRule10(boolean keySame) {
+		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
@@ -1190,12 +1278,15 @@ public class GlobalMatchSqlite {
 					+ "FROM GlobalMatch INDEXED BY match10";		// create prepared statement
 			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+				ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
 				while (resultSet.next()) {
 					String hash3 = resultSet.getString("hash3");		// get data from this resultset row
 					String hash6 = resultSet.getString("hash6");
 					int rowId = resultSet.getInt("id");
 
+					if (hash3.equals(nullEntry) || hash6.equals(nullEntry)) {
+						continue;					// skip to next if null entry
+					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash6, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
@@ -1203,12 +1294,12 @@ public class GlobalMatchSqlite {
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
 							while (rset9.next()) {
-								String tempName = rset9.getString("name");		// get data from this resultset row
+								//String tempName = rset9.getString("name");		// get data from this resultset row
 								int tempRowId = rset9.getInt("rowId");
-								System.out.println("found in temp: " + tempName + " " + tempRowId);
 								if (rowId != tempRowId) {
 									currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
-									currGlobalIdGroup.add(tempRowId);									
+									currGlobalIdGroup.add(tempRowId);
+									patientMatches++;
 								}
 							}
 							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -1219,6 +1310,9 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
+				tempMessage = "Match Rule 10 found: " + patientMatches + " patient matches";
+				writeLog(logInfo, tempMessage );		// write out patient matchs so far
+				System.out.println( tempMessage );
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1228,7 +1322,6 @@ public class GlobalMatchSqlite {
 				e1.printStackTrace();	
 			}
 		}	
-
 	}
 
 	private static void readGlobalMatchRule11(boolean keySame) {
@@ -1249,19 +1342,17 @@ public class GlobalMatchSqlite {
 				+ "FROM GlobalMatch INDEXED BY match11";		// create prepared statement
 		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
-			int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+			//int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			String nullKey = nullEntry;
 			while (resultSet.next()) {
 
 				recordsRead++;
-				StringBuilder sb1 = new StringBuilder();
-				for (int k = 1; k < columnCount; k++) {		//make up key to compare, all but last column
-					sb1.append(resultSet.getString(k) + delimPipe);
-				}
-				currRowId = resultSet.getInt("id");		// get row id in last column
-				String currPat = sb1.toString();
-
-				if (currPat.equals(lastPat)) {
+				String currPat = resultSet.getString("hash7");	// get data from this resultset row
+				currRowId = resultSet.getInt("id");				// get row id in last column
+				if (currPat.equals(nullKey)) {
+					currMatch = false;
+				} else if (currPat.equals(lastPat)) {
 					currMatch = true;
 					patientMatches++;
 					if (!lastMatch) {
@@ -1284,7 +1375,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 11 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog( tempMessage );				// write out patient match keys so far
+					writeLog(logInfo, tempMessage );				// write out patient match keys so far
 					System.out.println( tempMessage );
 				}
 			}
@@ -1292,6 +1383,9 @@ public class GlobalMatchSqlite {
 				addToGlobalIdGroup( currGlobalIdGroup );
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
+			tempMessage = "Match Rule 11 records processed: " + recordsRead + "  matches found: " + patientMatches;
+			writeLog(logInfo, tempMessage );				// write out patient match keys so far
+			System.out.println( tempMessage );
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -1320,19 +1414,17 @@ public class GlobalMatchSqlite {
 				+ "FROM GlobalMatch INDEXED BY match12";		// create prepared statement
 		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
-			int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+			//int columnCount = resultSet.getMetaData().getColumnCount();		// get column count
+			String nullKey = nullEntry;
 			while (resultSet.next()) {
 
 				recordsRead++;
-				StringBuilder sb1 = new StringBuilder();
-				for (int k = 1; k < columnCount; k++) {		//make up key to compare, all but last column
-					sb1.append(resultSet.getString(k) + delimPipe);
-				}
-				currRowId = resultSet.getInt("id");		// get row id in last column
-				String currPat = sb1.toString();
-
-				if (currPat.equals(lastPat)) {
+				String currPat = resultSet.getString("hash8");	// get data from this resultset row
+				currRowId = resultSet.getInt("id");				// get row id in last column
+				if (currPat.equals(nullKey)) {
+					currMatch = false;
+				} else if (currPat.equals(lastPat)) {
 					currMatch = true;
 					patientMatches++;
 					if (!lastMatch) {
@@ -1355,7 +1447,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 12 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog( tempMessage );				// write out patient match keys so far
+					writeLog(logInfo, tempMessage );				// write out patient match keys so far
 					System.out.println( tempMessage );
 				}
 			}
@@ -1363,6 +1455,9 @@ public class GlobalMatchSqlite {
 				addToGlobalIdGroup( currGlobalIdGroup );
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
+			tempMessage = "Match Rule 12 records processed: " + recordsRead + "  matches found: " + patientMatches;
+			writeLog(logInfo, tempMessage );				// write out patient match keys so far
+			System.out.println( tempMessage );
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -1372,80 +1467,6 @@ public class GlobalMatchSqlite {
 			e1.printStackTrace();	
 		}
 	}
-
-	/*
-	private static void readGlobalMatch() {
-		int recordsRead = 0;
-		if (db == null) {
-			connectDb();		// connect to database if no connection yet
-		}
-
-		// check if table exists
-		//String query1 = "SELECT name FROM sqlite_temp_master WHERE type='table' AND name='tempMatch'";
-		String query1 = "SELECT name FROM sqlite_master WHERE type='table' AND name='GlobalMatch'";
-		try ( PreparedStatement pstmt1 = db.prepareStatement(query1)) {
-			resultSet = pstmt1.executeQuery();		// executeQuery
-			if (resultSet.next() == false) {	// check if resultSet is empty
-				// message should always be found in table since put there by initial send
-				System.out.println("***existing table not found");
-			} else {
-				do {
-					String fileName = resultSet.getString("name");
-					System.out.println("found file name: " + fileName);
-				} while (resultSet.next()); 
-			}
-			if (resultSet != null) {
-				resultSet.close();
-			}
-		} catch (SQLException e1) {
-			e1.printStackTrace();
-		}
-
-		// query database
-		//db.setTransactionIsolation(TRANSACTION_READ_COMMITTED);
-		//String sqlQuery = "SELECT LNAME,FNAME,GENDER FROM patient ORDER BY FNAME,GENDER LIMIT 10 OFFSET 20";  // offset jumps to that row
-		String sqlQuery = "SELECT siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exception,globalId "
-				+ " FROM GlobalMatch";		// USE INDEX(match1)	// create prepared statement
-
-		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
-			//ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_UPDATABLE);	// if want to update during resultSet	
-			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-			resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
-
-			while (resultSet.next()) {
-
-				recordsRead++;
-				String siteId = resultSet.getString("siteId");		// get data from this resultset row
-				String projectId = resultSet.getString("projectId");
-				String pidhash = resultSet.getString("pidhash");
-				String hash1 = resultSet.getString("hash1");
-				String hash2 = resultSet.getString("hash2");
-				String hash3 = resultSet.getString("hash3");
-				String hash4 = resultSet.getString("hash4");
-				String hash5 = resultSet.getString("hash5");
-				String hash6 = resultSet.getString("hash6");
-				String hash7 = resultSet.getString("hash7");
-				String hash8 = resultSet.getString("hash8");
-				String hash9 = resultSet.getString("hash9");
-				String hash10 = resultSet.getString("hash10");
-				String exception = resultSet.getString("exception");
-				String gblId = resultSet.getString("globalId");
-
-				System.out.println("siteId: "+siteId+" projId: "+projectId+" pid: "+pidhash);
-				System.out.println("h1: "+hash1+" h2: "+hash2+" h3: "+hash3+" h4: "+hash4+" h5: "+hash5);
-				System.out.println("h6: "+hash6+" h7: "+hash7+" h8: "+hash8+" h9: "+hash9+" h10: "+hash10);
-				System.out.println("except: "+exception+"  globalId: "+gblId);
-			}
-			if (resultSet != null) {
-				resultSet.close();
-			}
-		} catch (SQLException e1) {
-			e1.printStackTrace();
-		} catch (Exception e1) {
-			e1.printStackTrace();	
-		}
-	}
-	*/
 
 	public static void writeInvalidData( String fileOut, String invalidData) {
 		if (invalidData == null || invalidData.isEmpty()) {		// check if anything in invalidData
@@ -1471,10 +1492,32 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	public static void writeLog(String textMessage) {
+	public static void writeLog(int logLevel, String textMessage) {
+		String firstPart;
+		switch (logLevel) {
+		case 0 :
+			firstPart = "    ";	// normal log message
+			break;
+		case 1 :
+			firstPart = " ** ";	// warning log message
+			break;
+		case 2 :
+			firstPart = " ## ";	// severe log message
+			break;
+		case 3 :
+			firstPart = " :: ";	// begin task log message
+			break;
+		case 4 :
+			firstPart = " >> ";	// begin section log message
+			break;
+		case 5 :
+			firstPart = "  > ";	// config log message
+		default :
+			firstPart = "    ";
+		}
 
 		String logFile1 = logFile + dateNowFormatted() + ".txt";
-		String text = timeNowFormatted() + " " + textMessage;
+		String text = timeNowFormatted() + firstPart + textMessage;
 
 		Path path = Paths.get( logFile1 );
 		if (Files.notExists(path)) {
@@ -1546,7 +1589,7 @@ public class GlobalMatchSqlite {
 		File fileNewLoc = FileUtils.getFile(fileNewLocName);
 		if (!fileToMove.exists()) {
 			tempMessage = "***file to move not found: " + fileToMoveName;	// check if file exists
-			writeLog( tempMessage );
+			writeLog(logSevere, tempMessage );
 			System.out.println( tempMessage);
 			return false;
 		}
@@ -1557,16 +1600,16 @@ public class GlobalMatchSqlite {
 				FileUtils.deleteQuietly(fileToMove);			// delete orig if copy successful
 			}
 			tempMessage = "file: " + fileToMove.getAbsolutePath();
-			writeLog( tempMessage );
+			writeLog(logInfo, tempMessage );
 			System.out.println( tempMessage );
 			tempMessage = "moved to: " + fileNewLoc.getAbsolutePath();
-			writeLog( tempMessage );
+			writeLog(logInfo, tempMessage );
 			System.out.println( tempMessage );
 			success = true;
 		} catch (IOException e) {
 			e.printStackTrace();
-			tempMessage = "***file not moved: " + fileToMoveName;
-			writeLog( tempMessage );
+			tempMessage = "file not moved: " + fileToMoveName;
+			writeLog(logSevere, tempMessage );
 			//System.out.println( tempMessage );
 		}
 		return success;
@@ -1602,17 +1645,8 @@ public class GlobalMatchSqlite {
 			masterFileMatch0 = changeDirectorySeparator(masterFileMatch0);	// change file separator if Windows
 			masterFileMatch1 = prop.getProperty("MasterFileMatch1");
 			masterFileMatch1 = changeDirectorySeparator(masterFileMatch1);	// change file separator if Windows
-			masterFileMatch2 = prop.getProperty("MasterFileMatch2");
-			masterFileMatch2 = changeDirectorySeparator(masterFileMatch2);	// change file separator if Windows
-			masterFileMatch3 = prop.getProperty("MasterFileMatch3");
-			masterFileMatch3 = changeDirectorySeparator(masterFileMatch3);	// change file separator if Windows
-			masterFileMatch4 = prop.getProperty("MasterFileMatch4");
-			masterFileMatch4 = changeDirectorySeparator(masterFileMatch4);	// change file separator if Windows
 			System.out.println("MasterFileMatch0: " + masterFileMatch0);
 			System.out.println("MasterFileMatch1: " + masterFileMatch1);
-			System.out.println("MasterFileMatch2: " + masterFileMatch2);
-			System.out.println("MasterFileMatch3: " + masterFileMatch3);
-			System.out.println("MasterFileMatch4: " + masterFileMatch4);
 			 */
 
 			String matchText = prop.getProperty("MatchingRules");				// get matching rules
@@ -1621,10 +1655,10 @@ public class GlobalMatchSqlite {
 				matchSequence.add( Integer.parseInt(tempArr[i]) );		// save match sequence as integer
 			}
 
-			writeLog("*****Starting Global Patient Match*****"); 
-			writeLog("reading configuration file " + configFile);
+			writeLog(logBegin, "Starting Global Patient Match <<");
+			writeLog(logConfig, "reading configuration file " + configFile);
 			tempMessage = "match rule sequence: " + matchSequence;
-			writeLog(tempMessage); 
+			writeLog(logConfig, tempMessage); 
 			System.out.println(tempMessage);
 		} catch (Exception e) {
 			//e.printStackTrace();
@@ -1670,7 +1704,7 @@ public class GlobalMatchSqlite {
 				break;		// only 1 line in file so exit loop
 			}
 			String tempMessage = "Global Id starting seed: " + atomicIntegerSeed;
-			writeLog( tempMessage );
+			writeLog(logConfig, tempMessage );
 			System.out.println( tempMessage );
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
@@ -1691,7 +1725,7 @@ public class GlobalMatchSqlite {
 			bw.write(saveRecord);  		// write out record to be read in next restart
 
 			String tempMessage = "Global Id ending seed: " + currGlobalId;
-			writeLog( tempMessage );
+			writeLog(logConfig, tempMessage );
 			System.out.println( tempMessage );
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -1841,7 +1875,8 @@ public class GlobalMatchSqlite {
 	}
 
 	public static void main(String[] args) {
-
+	
+		System.out.println(SW_NAME + SW_VERSION);	// show program name and version
 		String argumentOne = "noargs";
 		int processStep = 0;
 		try {
@@ -1851,6 +1886,7 @@ public class GlobalMatchSqlite {
 		catch (ArrayIndexOutOfBoundsException e){
 			System.out.println("no Step number found on startup");
 			System.out.println("Valid Steps: 1=process input files and 2=run match rules.");
+			System.exit(-1);
 		}
 		
 		//processStep = 1;	//****** testing
