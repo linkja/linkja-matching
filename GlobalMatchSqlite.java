@@ -93,7 +93,7 @@ public class GlobalMatchSqlite {
 	private static final int logSevere = 2;		// severe log message
 	private static final int logTask = 3;		// begin task log message
 	private static final int logBegin = 4;		// begin section log message
-	private static final int logConfig = 5;		// config log message
+	private static final int logSection = 5;		// config log message
 
 	private static Integer patGlobalIdCount = 0;
 	private static Map<Integer, List<Integer>> patGlobalIdMap = new HashMap<Integer, List<Integer>>(1000);
@@ -136,7 +136,7 @@ public class GlobalMatchSqlite {
 		try {
 			// db parameters
 			String url = "jdbc:sqlite:" + dbDirectory + dbName;		// create url to database
-			System.out.println("connecting to url: " + url);
+			writeLog(logInfo, "connecting to url: " + url, true);
 			db = DriverManager.getConnection(url);					// create connection to database
 			System.out.println("Connection to SQLite has been established.");
 		} catch (SQLException e) {
@@ -145,18 +145,16 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void processInputFiles(int step) {
+	public static void processInputFiles(int step) {
 
 		String fullName = null;			// read hash files from input directory
-		tempMessage = "step " + step + ": reading input files from: " + inputDir;
-		writeLog( logBegin, tempMessage );
-		System.out.println( tempMessage );
+		tempMessage = "Step " + step + ": reading input files from: " + inputDir;
+		writeLog( logBegin, tempMessage, true);
 		
 		ArrayList<String> inputFiles = getFileNames1Dir(inputDir, inputFileNamePrefix, inputFileNameSuffix);	// go read files in directory
 		if (inputFiles == null || inputFiles.size() == 0) {
 			tempMessage = "no input files found in directory " + inputDir;
-			writeLog(logWarning, tempMessage );
-			System.out.println( tempMessage );
+			writeLog(logWarning, tempMessage, true);
 			return;
 		}
 		if (db == null) {
@@ -172,10 +170,8 @@ public class GlobalMatchSqlite {
 			String invalidDataFile = changeFileExtension(inputFile1, "bad");
 			int recordsRead = 0;
 
-			// read input file
-			tempMessage = "processing hash file: " + inputFile1;
-			writeLog(logInfo, tempMessage );
-			System.out.println( tempMessage );
+			tempMessage = "processing hash file: " + inputFile1;	// indicate input file
+			writeLog(logSection, tempMessage, true);
 			
 			File fileIn = new File(inputFile1);
 			try ( BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(fileIn), "UTF-8"))) {
@@ -216,7 +212,7 @@ public class GlobalMatchSqlite {
 					}
 
 					String sql = "INSERT INTO GlobalMatch ("
-							+"siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exception,globalId) "
+							+"siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion,globalId) "
 							+ "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
 					try ( PreparedStatement pstmt = db.prepareStatement(sql)) {
@@ -250,8 +246,7 @@ public class GlobalMatchSqlite {
 			}
 
 			tempMessage = "read " + recordsRead + " lines from: " + inputFile1;
-			writeLog(logInfo, tempMessage );
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			// end read input file
 
 			// move file to processed dir
@@ -265,18 +260,18 @@ public class GlobalMatchSqlite {
 				}
 				if (!fileMoved) {
 					tempMessage = "file not moved to processed dir: " + fullName;
-					writeLog(logSevere, tempMessage );
-					System.out.println( tempMessage );
+					writeLog(logSevere, tempMessage, true);
 				}
 			}
 		}
 	}
 
 	// step 2 run match rules as indicated
-	private static void runMatchRules(int step) {
-		tempMessage = "step " + step + ": Run patient match rule sequence " + matchSequence;
-		writeLog( logBegin, tempMessage );
-		System.out.println( tempMessage );
+	public static void runMatchRules(int step) {
+		tempMessage = "Step " + step + ": Run patient match rule sequence " + matchSequence;
+		writeLog(logBegin, tempMessage, true);
+		
+		resetGlobalIds();					// go reset all Global Ids to 0
 		
 		assignPatientAliasGlobalIds();		// assign Global Ids to patient aliases first
 		
@@ -305,8 +300,7 @@ public class GlobalMatchSqlite {
 			}
 
 			tempMessage = "Processing Match Rule " + currentRule;
-			writeLog(logInfo, tempMessage );
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			
 			switch (currentRule) {		
 			case 0 :
@@ -363,7 +357,7 @@ public class GlobalMatchSqlite {
 				break;
 			default :
 			}
-			System.out.println("finished Match Rule " + currentRule);
+			writeLog(logInfo, "finished Match Rule " + currentRule, true);
 			//System.out.println("matching pats:");
 			//patGlobalIdMap.forEach((k, v) -> System.out.println((k + ":" + v)));	// print out - Java 8
 		}
@@ -371,13 +365,31 @@ public class GlobalMatchSqlite {
 		assignMatchedGlobalIds();	// go assign global ids for matched patients
 		assignUnMatchedGlobalIds();	// go assign global ids for patients without global ids
 	}
+	
+	public static void resetGlobalIds() {
+		tempMessage = "Resetting all global ids to 0";
+		writeLog(logTask, tempMessage, true);
+		int count = 0;
+		if (db == null) {
+			connectDb();		// connect to database if no connection yet
+		}
 
-	private static void assignMatchedGlobalIds() {
+		String sqlUpdate = "UPDATE GlobalMatch SET globalId = 0 WHERE globalId > 0";
+		try ( PreparedStatement pstmt = db.prepareStatement(sqlUpdate)) {
+			pstmt.setFetchSize(1000);		//number of rows to be fetched when needed
+			count = pstmt.executeUpdate();	// update this record
+		} catch (SQLException e) {
+			System.out.println(e.getMessage());
+		}
+		tempMessage = count + " global ids reset to 0";
+		writeLog(logTask, tempMessage, true);
+	}
+
+	public static void assignMatchedGlobalIds() {
 		int matchingPatGroups = 0;
 		int assignedGlobalIds = 0;
 		tempMessage = "Assigning global ids to matching patients";
-		System.out.println( tempMessage );
-		writeLog(logTask, tempMessage );
+		writeLog(logTask, tempMessage, true);
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
@@ -408,12 +420,10 @@ public class GlobalMatchSqlite {
 					Integer currGlobalId = resultSet.getInt("globalId");
 					if (currGlobalId > 0) {
 						if (currGlobalId < patAliasGlobalIdCutoff) {
-							maxGlobalId = currGlobalId;		// if alias patient global id use that for all
-							//System.out.println("found patient alias global id: " + currGlobalId);
+							maxGlobalId = currGlobalId;		// if alias pat global id found, use that for all
 							break;
 						} else if (maxGlobalId < currGlobalId) {
-							maxGlobalId = currGlobalId;
-							//System.out.println("found patient global id: " + currGlobalId);
+							maxGlobalId = currGlobalId;		// else keep track of max globalId
 						}
 					}
 				}
@@ -441,18 +451,15 @@ public class GlobalMatchSqlite {
 			}
 		}
 		tempMessage = "Found " + matchingPatGroups + " matching patient groups";
-		writeLog(logInfo, tempMessage );
-		System.out.println( tempMessage );
+		writeLog(logInfo, tempMessage, true);
 		tempMessage = "Assigned " + assignedGlobalIds + " new global ids to matching patients";
-		writeLog(logInfo, tempMessage );
-		System.out.println( tempMessage );
+		writeLog(logInfo, tempMessage, true);
 	}
 
-	private static void assignUnMatchedGlobalIds() {
+	public static void assignUnMatchedGlobalIds() {
 		int unAssignedGlobalIds = 0;
 		tempMessage = "Assigning global ids to unmatched patients";
-		writeLog(logTask, tempMessage );
-		System.out.println( tempMessage );
+		writeLog(logTask, tempMessage, true);
 		
 		createTempTableIdKey();		// go create temp table to hold pats without globalId
 
@@ -473,8 +480,7 @@ public class GlobalMatchSqlite {
 			System.out.println(e.getMessage());
 		}
 		tempMessage = "Assigning " + unAssignedGlobalIds + " global ids to patients without global ids";
-		writeLog(logInfo, tempMessage );
-		System.out.println( tempMessage );
+		writeLog(logInfo, tempMessage, true);
 
 		// update GlobalMatch.globalId using rowId, globalId from TempTable
 		String sql2 = "UPDATE GlobalMatch SET globalId ="
@@ -489,7 +495,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 	
-	private static void assignPatientAliasGlobalIds() {
+	public static void assignPatientAliasGlobalIds() {
 		Map<String, Integer> patAliasMap = new HashMap<String, Integer>(1000);
 		String lastPat = "xx";
 		int recordsRead = 0;
@@ -498,8 +504,7 @@ public class GlobalMatchSqlite {
 			connectDb();		// connect to database if no connection yet
 		}
 		tempMessage = "patient alias match starting";
-		writeLog(logBegin, tempMessage );
-		System.out.println( tempMessage );
+		writeLog(logBegin, tempMessage, true);
 
 		// query database
 		String sqlQuery = "SELECT pidhash,siteId,projectId,id FROM GlobalMatch INDEXED BY pidindex";	// create prepared statement
@@ -532,8 +537,7 @@ public class GlobalMatchSqlite {
 			e1.printStackTrace();	
 		}
 		tempMessage = "records processed: " +recordsRead+ "  pat alias matches found: " +patAliasMapCount;
-		writeLog(logInfo, tempMessage );				// write out patient match keys
-		System.out.println( tempMessage );
+		writeLog(logInfo, tempMessage, true);				// write to log
 
 		Integer patAliasLastGlobalId = 0;
 		// loop thru patAliasMap entries to assign global ids
@@ -560,12 +564,10 @@ public class GlobalMatchSqlite {
 			patAliasGlobalIdCutoff = ((patAliasLastGlobalId + 100) /100) * 100;		// round up to nearest 100
 			globalId = new AtomicInteger(patAliasGlobalIdCutoff);	// set regular global id above last alias global id
 			tempMessage = "last pat alias Global Id: " +patAliasLastGlobalId+ ", setting base Global Id to: " +patAliasGlobalIdCutoff;
-			writeLog(logInfo, tempMessage );				// write out 
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true); 
 		} else {
 			tempMessage = "no pat alias Global Ids assigned, base Global Id is at: " + globalId.get();	// get (but don't increment)
-			writeLog(logInfo, tempMessage );				// write out 
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 		}
 	}
 
@@ -630,8 +632,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 0 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog(logInfo, tempMessage );		// write out patient match keys so far
-					System.out.println( tempMessage );
+					writeLog(logInfo, tempMessage, true);
 				}
 			}
 			if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -639,8 +640,7 @@ public class GlobalMatchSqlite {
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
 			tempMessage = "Match Rule 0 records processed: " + recordsRead + "  matches found: " + patientMatches;
-			writeLog(logInfo, tempMessage );		// write out patient match keys so far
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -718,8 +718,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 1 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog(logInfo, tempMessage );				// write out patient match keys so far
-					System.out.println( tempMessage );
+					writeLog(logInfo, tempMessage, true);
 				}
 			}
 			if (currGlobalIdGroup != null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -727,8 +726,7 @@ public class GlobalMatchSqlite {
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
 			tempMessage = "Match Rule 1 records processed: " + recordsRead + "  matches found: " + patientMatches;
-			writeLog(logInfo, tempMessage );				// write out patient match keys so far
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -799,8 +797,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 2 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog(logInfo, tempMessage );				// write out patient match keys so far
-					System.out.println( tempMessage );
+					writeLog(logInfo, tempMessage, true);
 				}
 			}
 			if (currGlobalIdGroup != null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -808,8 +805,7 @@ public class GlobalMatchSqlite {
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
 			tempMessage = "Match Rule 2 records processed: " + recordsRead + "  matches found: " + patientMatches;
-			writeLog(logInfo, tempMessage );				// write out patient match keys so far
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -871,8 +867,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 3 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog(logInfo, tempMessage );				// write out patient match keys so far
-					System.out.println( tempMessage );
+					writeLog(logInfo, tempMessage, true);
 				}
 			}
 			if (currGlobalIdGroup != null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -880,8 +875,7 @@ public class GlobalMatchSqlite {
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
 			tempMessage = "Match Rule 3 records processed: " + recordsRead + "  matches found: " + patientMatches;
-			writeLog(logInfo, tempMessage );				// write out patient match keys so far
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -939,8 +933,7 @@ public class GlobalMatchSqlite {
 					}
 				}
 				tempMessage = "Match Rule 4 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage );		// write out patient matchs so far
-				System.out.println( tempMessage );
+				writeLog(logInfo, tempMessage, true);
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -999,8 +992,7 @@ public class GlobalMatchSqlite {
 					}
 				}
 				tempMessage = "Match Rule 5 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage );		// write out patient matchs so far
-				System.out.println( tempMessage );
+				writeLog(logInfo, tempMessage, true);
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1059,8 +1051,7 @@ public class GlobalMatchSqlite {
 					}
 				}
 				tempMessage = "Match Rule 6 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage );		// write out patient matchs so far
-				System.out.println( tempMessage );
+				writeLog(logInfo, tempMessage, true);
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1119,8 +1110,7 @@ public class GlobalMatchSqlite {
 					}
 				}
 				tempMessage = "Match Rule 7 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage );		// write out patient matchs so far
-				System.out.println( tempMessage );
+				writeLog(logInfo, tempMessage, true);
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1183,8 +1173,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 8 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog(logInfo, tempMessage );				// write out patient match keys so far			
-					System.out.println( tempMessage );
+					writeLog(logInfo, tempMessage, true);
 				}
 			}
 			if (currGlobalIdGroup != null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -1192,8 +1181,7 @@ public class GlobalMatchSqlite {
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
 			tempMessage = "Match Rule 8 records processed: " + recordsRead + "  matches found: " + patientMatches;
-			writeLog(logInfo, tempMessage );				// write out patient match keys so far			
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -1251,8 +1239,7 @@ public class GlobalMatchSqlite {
 					}
 				}
 				tempMessage = "Match Rule 9 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage );		// write out patient matchs so far
-				System.out.println( tempMessage );
+				writeLog(logInfo, tempMessage, true);
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1311,8 +1298,7 @@ public class GlobalMatchSqlite {
 					}
 				}
 				tempMessage = "Match Rule 10 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage );		// write out patient matchs so far
-				System.out.println( tempMessage );
+				writeLog(logInfo, tempMessage, true);
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1375,8 +1361,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 11 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog(logInfo, tempMessage );				// write out patient match keys so far
-					System.out.println( tempMessage );
+					writeLog(logInfo, tempMessage, true);
 				}
 			}
 			if (currGlobalIdGroup != null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -1384,8 +1369,7 @@ public class GlobalMatchSqlite {
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
 			tempMessage = "Match Rule 11 records processed: " + recordsRead + "  matches found: " + patientMatches;
-			writeLog(logInfo, tempMessage );				// write out patient match keys so far
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -1447,8 +1431,7 @@ public class GlobalMatchSqlite {
 
 				if ((recordsRead % 10000) == 0) {
 					tempMessage = "Match Rule 12 records processed: " + recordsRead + "  matches found: " + patientMatches;
-					writeLog(logInfo, tempMessage );				// write out patient match keys so far
-					System.out.println( tempMessage );
+					writeLog(logInfo, tempMessage, true);
 				}
 			}
 			if (currGlobalIdGroup != null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
@@ -1456,8 +1439,7 @@ public class GlobalMatchSqlite {
 				currGlobalIdGroup.clear();					// clear list for next match
 			}
 			tempMessage = "Match Rule 12 records processed: " + recordsRead + "  matches found: " + patientMatches;
-			writeLog(logInfo, tempMessage );				// write out patient match keys so far
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			if (resultSet != null) {
 				resultSet.close();
 			}
@@ -1472,7 +1454,6 @@ public class GlobalMatchSqlite {
 		if (invalidData == null || invalidData.isEmpty()) {		// check if anything in invalidData
 			return;
 		}
-		//System.out.println("skip invalid data record");
 
 		Path path = Paths.get( fileOut );
 		if (Files.notExists(path)) {
@@ -1492,7 +1473,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	public static void writeLog(int logLevel, String textMessage) {
+	public static void writeLog(int logLevel, String textMessage, boolean echoConsole) {
 		String firstPart;
 		switch (logLevel) {
 		case 0 :
@@ -1511,17 +1492,20 @@ public class GlobalMatchSqlite {
 			firstPart = " >> ";	// begin section log message
 			break;
 		case 5 :
-			firstPart = "  > ";	// config log message
+			firstPart = "  > ";	// begin subsection log message
+			break;
 		default :
 			firstPart = "    ";
 		}
-
-		String logFile1 = logFile + dateNowFormatted() + ".txt";
+		if (echoConsole) {
+			System.out.println(firstPart + textMessage);			// echo to console if requested
+		}
+		String logFile1 = logFile + dateNowFormatted() + ".txt";	// create log file name
 		String text = timeNowFormatted() + firstPart + textMessage;
 
 		Path path = Paths.get( logFile1 );
 		if (Files.notExists(path)) {
-			try { Files.createFile(path);		// create file if doesn't exist
+			try { Files.createFile(path);						// create file if doesn't exist
 			} catch (IOException e) { e.printStackTrace(); }
 		}
 		try(    FileWriter fw = new FileWriter( logFile1, true);  //try-with-resources --> autoclose
@@ -1589,8 +1573,7 @@ public class GlobalMatchSqlite {
 		File fileNewLoc = FileUtils.getFile(fileNewLocName);
 		if (!fileToMove.exists()) {
 			tempMessage = "***file to move not found: " + fileToMoveName;	// check if file exists
-			writeLog(logSevere, tempMessage );
-			System.out.println( tempMessage);
+			writeLog(logSevere, tempMessage, true);
 			return false;
 		}
 
@@ -1600,17 +1583,14 @@ public class GlobalMatchSqlite {
 				FileUtils.deleteQuietly(fileToMove);			// delete orig if copy successful
 			}
 			tempMessage = "file: " + fileToMove.getAbsolutePath();
-			writeLog(logInfo, tempMessage );
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			tempMessage = "moved to: " + fileNewLoc.getAbsolutePath();
-			writeLog(logInfo, tempMessage );
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 			success = true;
 		} catch (IOException e) {
 			e.printStackTrace();
 			tempMessage = "file not moved: " + fileToMoveName;
-			writeLog(logSevere, tempMessage );
-			//System.out.println( tempMessage );
+			writeLog(logSevere, tempMessage, true);
 		}
 		return success;
 	}
@@ -1643,10 +1623,7 @@ public class GlobalMatchSqlite {
 			/*
 			masterFileMatch0 = prop.getProperty("MasterFileMatch0");
 			masterFileMatch0 = changeDirectorySeparator(masterFileMatch0);	// change file separator if Windows
-			masterFileMatch1 = prop.getProperty("MasterFileMatch1");
-			masterFileMatch1 = changeDirectorySeparator(masterFileMatch1);	// change file separator if Windows
 			System.out.println("MasterFileMatch0: " + masterFileMatch0);
-			System.out.println("MasterFileMatch1: " + masterFileMatch1);
 			 */
 
 			String matchText = prop.getProperty("MatchingRules");				// get matching rules
@@ -1655,11 +1632,12 @@ public class GlobalMatchSqlite {
 				matchSequence.add( Integer.parseInt(tempArr[i]) );		// save match sequence as integer
 			}
 
-			writeLog(logBegin, "Starting Global Patient Match <<");
-			writeLog(logConfig, "reading configuration file " + configFile);
+			writeLog(logBegin, "Starting Global Patient Match <<", true);
+			writeLog(logInfo, "reading configuration file " + configFile, true);
 			tempMessage = "match rule sequence: " + matchSequence;
-			writeLog(logConfig, tempMessage); 
-			System.out.println(tempMessage);
+			writeLog(logSection, tempMessage, true); 
+			tempMessage = "input file prefix/suffix: " + inputFileNamePrefix +" / "+ inputFileNameSuffix;
+			writeLog(logInfo, tempMessage, true); 
 		} catch (Exception e) {
 			//e.printStackTrace();
 			System.out.println("**read config error message: "+e.getMessage());
@@ -1704,8 +1682,7 @@ public class GlobalMatchSqlite {
 				break;		// only 1 line in file so exit loop
 			}
 			String tempMessage = "Global Id starting seed: " + atomicIntegerSeed;
-			writeLog(logConfig, tempMessage );
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		} catch (FileNotFoundException e) {
@@ -1725,8 +1702,7 @@ public class GlobalMatchSqlite {
 			bw.write(saveRecord);  		// write out record to be read in next restart
 
 			String tempMessage = "Global Id ending seed: " + currGlobalId;
-			writeLog(logConfig, tempMessage );
-			System.out.println( tempMessage );
+			writeLog(logInfo, tempMessage, true);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
