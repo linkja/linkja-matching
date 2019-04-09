@@ -996,18 +996,16 @@ public class GlobalMatchSqlite {
 					String hash2 = resultSet.getString("hash2");
 					int rowId = resultSet.getInt("id");
 				
-					if (hash2.equals(nullEntry) || hash2.isEmpty()) {
-						continue;					// skip to next if hash2 has null entry
-					}
 					if (loop == 1) {
-						storeToTempTableTextKey(hash2, rowId);	// save to temp file 1st time through
+						if (hash2.equals(nullEntry) || hash2.isEmpty()) { continue;	} // skip to next if hash2 has null entry
+						storeToTempTableTextKey(hash2, rowId);	// save hash 2 to temp file 1st time through
 					} else {					// 2nd time through check if find match
-						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
+						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; } // if hash1 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
 							while (rset9.next()) {
-								//String tempName = rset9.getString("name");		// get data from this resultset row
+								String tempName = rset9.getString("name");		// get data from this resultset row
 								int tempRowId = rset9.getInt("rowId");
 								if (rowId != tempRowId) {
 									currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
@@ -1023,8 +1021,10 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
-				tempMessage = "Match Rule 4 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage, true);
+				if (loop > 1) {
+					tempMessage = "Match Rule 4 found: " + patientMatches + " patient matches";
+					writeLog(logInfo, tempMessage, true);
+				}
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1055,14 +1055,12 @@ public class GlobalMatchSqlite {
 					String hash1 = resultSet.getString("hash1");		// get data from this resultset row
 					String hash5 = resultSet.getString("hash5");
 					int rowId = resultSet.getInt("id");
-					
-					if (hash5.equals(nullEntry)|| hash5.isEmpty()) {
-						continue;		// skip to next if hash5 has null entry
-					}
+
 					if (loop == 1) {
+						if (hash5.equals(nullEntry) || hash5.isEmpty()) { continue; } // skip to next if hash5 has null entry
 						storeToTempTableTextKey(hash5, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
-						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
+						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; } // if hash1 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
@@ -1083,8 +1081,10 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
-				tempMessage = "Match Rule 5 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage, true);
+				if (loop > 1) {
+					tempMessage = "Match Rule 5 found: " + patientMatches + " patient matches";
+					writeLog(logInfo, tempMessage, true);
+				}
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1116,13 +1116,11 @@ public class GlobalMatchSqlite {
 					String hash9 = resultSet.getString("hash9");
 					int rowId = resultSet.getInt("id");
 
-					if (hash9.equals(nullEntry) || hash9.isEmpty()) {
-						continue;					// skip to next if hash9 is null entry
-					}
 					if (loop == 1) {
+						if (hash9.equals(nullEntry) || hash9.isEmpty()) { continue;	} // skip to next if hash9 is null entry
 						storeToTempTableTextKey(hash9, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
-						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
+						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; } // if hash1 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
@@ -1143,8 +1141,10 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
-				tempMessage = "Match Rule 6 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage, true);
+				if (loop > 1) {
+					tempMessage = "Match Rule 6 found: " + patientMatches + " patient matches";
+					writeLog(logInfo, tempMessage, true);
+				}
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1176,10 +1176,8 @@ public class GlobalMatchSqlite {
 					String hash10 = resultSet.getString("hash10");
 					int rowId = resultSet.getInt("id");
 
-					if (hash10.equals(nullEntry) || hash10.isEmpty()) {
-						continue;					// skip to next if hash10 is null entry
-					}
 					if (loop == 1) {
+						if (hash10.equals(nullEntry) || hash10.isEmpty()) { continue; }	// skip to next if hash10 is null entry
 						storeToTempTableTextKey(hash10, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
 						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
@@ -1203,8 +1201,10 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
-				tempMessage = "Match Rule 7 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage, true);
+				if (loop > 1) {
+					tempMessage = "Match Rule 7 found: " + patientMatches + " patient matches";
+					writeLog(logInfo, tempMessage, true);
+				}
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1305,14 +1305,12 @@ public class GlobalMatchSqlite {
 					String hash3 = resultSet.getString("hash3");		// get data from this resultset row
 					String hash4 = resultSet.getString("hash4");
 					int rowId = resultSet.getInt("id");
-					
-					if (hash4.equals(nullEntry) || hash4.isEmpty()) {
-						continue;					// skip to next if hash4 is null entry
-					}
+
 					if (loop == 1) {
+						if (hash4.equals(nullEntry) || hash4.isEmpty()) { continue;	} // skip to next if hash4 is null entry
 						storeToTempTableTextKey(hash4, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
-						if (hash3.equals(nullEntry) || hash3.isEmpty()) { continue; }	// if hash3 empty =nomatch, skip to next
+						if (hash3.equals(nullEntry) || hash3.isEmpty()) { continue; } // if hash3 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash3+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
@@ -1333,8 +1331,10 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
-				tempMessage = "Match Rule 9 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage, true);
+				if (loop > 1) {
+					tempMessage = "Match Rule 9 found: " + patientMatches + " patient matches";
+					writeLog(logInfo, tempMessage, true);
+				}
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1366,18 +1366,16 @@ public class GlobalMatchSqlite {
 					String hash6 = resultSet.getString("hash6");
 					int rowId = resultSet.getInt("id");
 
-					if (hash6.equals(nullEntry) || hash6.isEmpty()) {
-						continue;					// skip to next if hash 6 is null entry
-					}
 					if (loop == 1) {
+						if (hash6.equals(nullEntry) || hash6.isEmpty()) { continue; } // skip to next if hash 6 is null entry
 						storeToTempTableTextKey(hash6, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
-						if (hash3.equals(nullEntry) || hash3.isEmpty()) { continue; }	// if hash3 empty =nomatch, skip to next
+						if (hash3.equals(nullEntry) || hash3.isEmpty()) { continue; } // if hash3 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash3+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
 							while (rset9.next()) {
-								//String tempName = rset9.getString("name");		// get data from this resultset row
+								//String tempName = rset9.getString("name");	// get data from this resultset row
 								int tempRowId = rset9.getInt("rowId");
 								if (rowId != tempRowId) {
 									currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
@@ -1393,8 +1391,10 @@ public class GlobalMatchSqlite {
 						} 
 					}
 				}
-				tempMessage = "Match Rule 10 found: " + patientMatches + " patient matches";
-				writeLog(logInfo, tempMessage, true);
+				if (loop > 1) {
+					tempMessage = "Match Rule 10 found: " + patientMatches + " patient matches";
+					writeLog(logInfo, tempMessage, true);
+				}
 				if (resultSet != null) {
 					resultSet.close();
 				}
@@ -1948,10 +1948,11 @@ public class GlobalMatchSqlite {
 			System.out.println(e.getMessage());
 		}
 		/*
+		System.out.println("-----------------------");
 		try ( PreparedStatement pstmt9 = db.prepareStatement("SELECT * FROM " + TempTableTextKey)) {
 			ResultSet rset9 = pstmt9.executeQuery();
 			while (rset9.next()) {
-				System.out.println("temp name: " + rset9.getString("name") + " gblid: " + rset9.getInt("rowId"));
+				System.out.println("temp name: " + rset9.getString("name") + " rowId: " + rset9.getInt("rowId"));
 			}
 			if (rset9 != null) {
 				rset9.close();
