@@ -996,12 +996,13 @@ public class GlobalMatchSqlite {
 					String hash2 = resultSet.getString("hash2");
 					int rowId = resultSet.getInt("id");
 				
-					if (hash1.equals(nullEntry) || hash2.equals(nullEntry) || hash1.isEmpty() || hash2.isEmpty()) {
-						continue;					// skip to next if null entry
+					if (hash2.equals(nullEntry) || hash2.isEmpty()) {
+						continue;					// skip to next if hash2 has null entry
 					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash2, rowId);	// save to temp file 1st time through
-					} else {									// 2nd time through check if find match
+					} else {					// 2nd time through check if find match
+						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
@@ -1055,12 +1056,13 @@ public class GlobalMatchSqlite {
 					String hash5 = resultSet.getString("hash5");
 					int rowId = resultSet.getInt("id");
 					
-					if (hash1.equals(nullEntry) || hash5.equals(nullEntry) || hash1.isEmpty() || hash5.isEmpty()) {
-						continue;					// skip to next if null entry
+					if (hash5.equals(nullEntry)|| hash5.isEmpty()) {
+						continue;		// skip to next if hash5 has null entry
 					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash5, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
+						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
@@ -1114,12 +1116,13 @@ public class GlobalMatchSqlite {
 					String hash9 = resultSet.getString("hash9");
 					int rowId = resultSet.getInt("id");
 
-					if (hash1.equals(nullEntry) || hash9.equals(nullEntry) || hash1.isEmpty() || hash9.isEmpty()) {
-						continue;					// skip to next if null entry
+					if (hash9.equals(nullEntry) || hash9.isEmpty()) {
+						continue;					// skip to next if hash9 is null entry
 					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash9, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
+						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
@@ -1173,12 +1176,13 @@ public class GlobalMatchSqlite {
 					String hash10 = resultSet.getString("hash10");
 					int rowId = resultSet.getInt("id");
 
-					if (hash1.equals(nullEntry) || hash10.equals(nullEntry) || hash1.isEmpty() || hash10.isEmpty()) {
-						continue;					// skip to next if null entry
+					if (hash10.equals(nullEntry) || hash10.isEmpty()) {
+						continue;					// skip to next if hash10 is null entry
 					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash10, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
+						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
@@ -1302,12 +1306,13 @@ public class GlobalMatchSqlite {
 					String hash4 = resultSet.getString("hash4");
 					int rowId = resultSet.getInt("id");
 					
-					if (hash3.equals(nullEntry) || hash4.equals(nullEntry) || hash3.isEmpty() || hash4.isEmpty()) {
-						continue;					// skip to next if null entry
+					if (hash4.equals(nullEntry) || hash4.isEmpty()) {
+						continue;					// skip to next if hash4 is null entry
 					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash4, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
+						if (hash3.equals(nullEntry) || hash3.isEmpty()) { continue; }	// if hash3 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash3+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
@@ -1361,12 +1366,13 @@ public class GlobalMatchSqlite {
 					String hash6 = resultSet.getString("hash6");
 					int rowId = resultSet.getInt("id");
 
-					if (hash3.equals(nullEntry) || hash6.equals(nullEntry) || hash3.isEmpty() || hash6.isEmpty()) {
-						continue;					// skip to next if null entry
+					if (hash6.equals(nullEntry) || hash6.isEmpty()) {
+						continue;					// skip to next if hash 6 is null entry
 					}
 					if (loop == 1) {
 						storeToTempTableTextKey(hash6, rowId);	// save to temp file 1st time through
 					} else {									// 2nd time through check if find match
+						if (hash3.equals(nullEntry) || hash3.isEmpty()) { continue; }	// if hash3 empty =nomatch, skip to next
 						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash3+"'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
