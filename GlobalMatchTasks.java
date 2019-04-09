@@ -35,7 +35,7 @@ public class GlobalMatchTasks extends Application {
 	private GlobalMatchSqlite gMatch;
 
 	private BorderPane root = null;
-	private Button inputButton = new Button("Input Data");		// Create the Buttons
+	private Button inputButton = new Button("Load Data");		// Create the Buttons
 	private Button matchButton = new Button("Match Rules");
 	private Button reportButton = new Button("Report Data");
 	private Button helpButton = new Button("Help");
@@ -127,7 +127,8 @@ public class GlobalMatchTasks extends Application {
 		inputButton.setTooltip( tt1 );
 		inputButton.setOnAction( event -> {
 			clearMessageAreas();
-			if (baseDirectory.getText().trim().isEmpty() || !baseDirectory.getText().contains(directorySeparator)) {
+			String targetDir = baseDirectory.getText().trim();
+			if (targetDir.isEmpty() || (!targetDir.contains(directorySeparator) && !targetDir.contains("\\"))) {
 				exception.setText("Project root must contain directory separator\nExample:  C:/GlobalMatch");
 			} else {
 				// start of task1 in separate thread
@@ -163,7 +164,8 @@ public class GlobalMatchTasks extends Application {
 		matchButton.setOnAction( (event) -> {			// define on action event
 			clearMessageAreas();
 			List<Integer> checkedRules = getCheckedRules();
-			if (baseDirectory.getText().trim().isEmpty() || !baseDirectory.getText().contains(directorySeparator)) {
+			String targetDir = baseDirectory.getText().trim();
+			if (targetDir.isEmpty() || (!targetDir.contains(directorySeparator) && !targetDir.contains("\\"))) {
 				exception.setText("Project root must contain directory separator\nExample:  C:/GlobalMatch");
 			} else if (checkedRules.size() == 0) {
 				exception.setText("No match rule(s) selected");
@@ -199,7 +201,8 @@ public class GlobalMatchTasks extends Application {
 		reportButton.setOnAction( (event) -> {
 			String site;
 			clearMessageAreas();
-			if (baseDirectory.getText().trim().isEmpty() || !baseDirectory.getText().contains(directorySeparator)) {
+			String targetDir = baseDirectory.getText().trim();
+			if (targetDir.isEmpty() || (!targetDir.contains(directorySeparator) && !targetDir.contains("\\"))) {
 					exception.setText("Project root must contain directory separator\nExample:  C:/GlobalMatch");
 			} else {
 				//https://code.makery.ch/blog/javafx-dialogs-official/
@@ -219,7 +222,7 @@ public class GlobalMatchTasks extends Application {
 				final String targetSite = site;
 				Task<Void> task3 = new Task<Void>() {			// do task in separate thread
 					@Override protected Void call() throws Exception {
-						updateMessage("Generating Report 1 from GlobalMatch table");
+						updateMessage("Generating Report 1 from GlobalMatch table for site " + targetSite);
 						projectRoot = baseDirectory.getText();			// get which project working on
 						gMatch = new GlobalMatchSqlite(projectRoot);	// create instance of global match
 						gMatch.createReport1( targetSite );
@@ -283,7 +286,7 @@ public class GlobalMatchTasks extends Application {
 		root.setCenter(centerVBox);
 		root.setBottom(buttonBox);
 
-		Scene scene = new Scene(root,820,590);				// Create the Scene
+		Scene scene = new Scene(root, 975, 650);			// Create the Scene
 		stage.setScene(scene);								// Add the scene to the Stage
 		stage.setTitle("Global Patient Matching Tasks");	// Set title of Stage
 		stage.show();										// Display the Stage
@@ -292,7 +295,7 @@ public class GlobalMatchTasks extends Application {
 	private void clearMessageAreas() {
 		//message.setText("");			// can't clear because bound with task	
 		//runStatus.setText("idle");	// can't clear because bound with task
-		exception.setText("");		// clear message areas
+		exception.setText("");			// clear message areas
 		matchRule.setText("");
 	}
 	

@@ -95,7 +95,7 @@ public class GlobalMatchSqlite {
 	private static final int logSevere = 2;		// severe log message
 	private static final int logTask = 3;		// begin task log message
 	private static final int logBegin = 4;		// begin section log message
-	private static final int logSection = 5;		// config log message
+	private static final int logSection = 5;	// config log message
 
 	private static Integer patGlobalIdCount = 0;
 	private static Map<Integer, List<Integer>> patGlobalIdMap = new HashMap<Integer, List<Integer>>(1000);
@@ -449,6 +449,11 @@ public class GlobalMatchSqlite {
 		assignUnMatchedGlobalIds();	// go assign global ids for patients without global ids
 		
 		writeAtomicIntegerSeed();				// go save current value of next globalId
+		if (db != null) {
+			try {
+				db.close();
+			} catch (SQLException e) { /* ignored */}
+		}
 	}
 	
 	public static void resetGlobalIds() {
@@ -1873,6 +1878,7 @@ public class GlobalMatchSqlite {
 	
 	// generate report
 	public static void createReport1(String site) {
+		String sql1;
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
@@ -1890,7 +1896,11 @@ public class GlobalMatchSqlite {
 				BufferedWriter bw = new BufferedWriter(fw);
 				PrintWriter out = new PrintWriter(bw)) {
 
-			String sql1 = "SELECT * FROM report1 WHERE siteId = '" + site + "'";
+			if (!site.equalsIgnoreCase("All")) {
+				sql1 = "SELECT * FROM report1 WHERE siteId = '" + site + "'";
+			} else {
+				sql1 = "SELECT * FROM report1";
+			}
 			try ( PreparedStatement stmt1 = db.prepareStatement(sql1)) {
 				stmt1.setFetchSize(1000);				//number of rows to be fetched when needed
 				ResultSet rs1 = stmt1.executeQuery();
@@ -1908,7 +1918,12 @@ public class GlobalMatchSqlite {
 		} catch( IOException e ) {
 			// File writing/opening failed at some stage.
 			System.out.println("**Unable to write to  file " + report1File);
-		} 		
+		}
+		if (db != null) {
+			try {
+				db.close();
+			} catch (SQLException e) { /* ignored */}
+		}
 	}
 
 	// store to Temp table with text primary key
@@ -1989,7 +2004,7 @@ public class GlobalMatchSqlite {
 		System.out.println(SW_NAME + SW_VERSION);	// show program name and version
 		try {
 			for (int param = 0; param < args.length; ++param) {
-				if (args[param].contains("/") || args[param].contains("\\")) {	// check for project root
+				if (args[param].contains(directorySeparator) || args[param].contains("\\")) {	// check for project root
 					configRootPath = args[param];
 				} else if (args[param].equalsIgnoreCase("--directory") && args.length > param + 1) {
 					param++;
@@ -2000,7 +2015,7 @@ public class GlobalMatchSqlite {
 			}
 		} catch (Exception e){
 			System.out.println("Valid params: Project Root,  Step number: 1=process input files and 2=run match rules.");
-			//System.exit(-1);
+			System.exit(-1);
 		}
 
 		//processStep = 1;	//****** testing
@@ -2024,7 +2039,6 @@ public class GlobalMatchSqlite {
 		}
 
 		writeAtomicIntegerSeed();				// go save current value of next globalId
-
 		if (db != null) {
 			try {
 				db.close();
