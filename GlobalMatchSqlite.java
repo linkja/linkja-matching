@@ -231,7 +231,7 @@ public class GlobalMatchSqlite {
 						continue;			// skip to next record
 					}
 
-					String sql = "INSERT INTO GlobalMatch ("
+					String sql = "INSERT INTO InclusionPatients ("
 							+"siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion,globalId) "
 							+ "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
@@ -290,7 +290,7 @@ public class GlobalMatchSqlite {
 	
 	public static void saveExclusionPatients(List<String> exclusionPats) {
 		
-		tempMessage = "storing " + exclusionPats.size() + " exclusion patients";
+		tempMessage = "storing " + exclusionPats.size() + " exclusion patient(s)";
 		writeLog(logInfo, tempMessage, true);
 		
 		for (String entry : exclusionPats) {
@@ -323,7 +323,42 @@ public class GlobalMatchSqlite {
 		}
 	}
 	
-	public static void transferExclusionPatients(List<String> exclusionPats) {
+	public static void resetGlobalMatchTable() {
+		tempMessage = "Clearing GlobalMatch Table";
+		writeLog(logTask, tempMessage, true);
+		int count = 0;
+		if (db == null) {
+			connectDb();		// connect to database if no connection yet
+		}
+		
+		String sqlDelete = "DELETE FROM GlobalMatch";	// delete existing records
+		try ( PreparedStatement pstmt1 = db.prepareStatement(sqlDelete) ) {
+			count = pstmt1.executeUpdate();	// update this record
+		} catch (SQLException e) {
+			System.out.println(e.getMessage());
+		}
+		tempMessage = count + " rows deleted from GlobalMatch";
+		writeLog(logTask, tempMessage, true);
+		
+		transferInclusionPatients();	// go load GlobalMatch table from InclusionPatients
+	}
+	
+	public static void transferInclusionPatients() {
+		
+		int count = 0;
+		String sql1 = 		
+		"INSERT INTO GlobalMatch (globalId,siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,hash11,hash12,exclusion) "+
+		"SELECT globalId,siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,hash11,hash12,exclusion FROM InclusionPatients";
+		try ( PreparedStatement pstmt = db.prepareStatement(sql1)) {
+			count = pstmt.executeUpdate();			// store to database
+		} catch (SQLException e) {
+			System.out.println(e.getMessage());
+		}
+		tempMessage = "transferring " + count + " Inclusion Patient(s) to GlobalMatch table";
+		writeLog(logInfo, tempMessage, true);
+	}
+	
+	public static void transferExclusionPatients() {
 		
 		int count = 0;
 		String sql1 = 		
@@ -334,9 +369,10 @@ public class GlobalMatchSqlite {
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
 		}
-		tempMessage = "transferring " + count + " exclusion patient(s) to main table";
+		tempMessage = "transferring " + count + " Exclusion Patient(s) to GlobalMatch table";
 		writeLog(logInfo, tempMessage, true);
 
+		/*
 		String sql2 = "DELETE from ExclusionPatients";
 		try ( PreparedStatement pstmt2 = db.prepareStatement(sql2)) {
 			pstmt2.executeUpdate();			// delete records
@@ -345,6 +381,7 @@ public class GlobalMatchSqlite {
 		}
 		tempMessage = "deleting all records from ExclusionPatients table";
 		writeLog(logInfo, tempMessage, true);
+		*/
 	}
 
 	// step 2 run match rules as indicated
@@ -354,8 +391,9 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		resetGlobalIds();					// go reset all Global Ids to 0
-		assignPatientAliasGlobalIds();		// assign Global Ids to patient aliases first
+		//resetGlobalIds();				// go reset all Global Ids to 0
+		resetGlobalMatchTable();		// clear GlobalMatch Table and import from InclusionPatients
+		assignPatientAliasGlobalIds();	// assign Global Ids to patient aliases first
 		
 		for (Integer currentRule : ruleList) {		// parse and run match rules
 
@@ -444,16 +482,17 @@ public class GlobalMatchSqlite {
 			//patGlobalIdMap.forEach((k, v) -> System.out.println((k + ":" + v)));	// print out - Java 8
 		}
 
-		assignMatchedGlobalIds();	// go assign global ids for matched patients
-		transferExclusionPatients(exclusionPats);	// transfer exclusion patients to GlobalMath
-		assignUnMatchedGlobalIds();	// go assign global ids for patients without global ids
+		assignMatchedGlobalIds();		// go assign global ids for matched patients
+		transferExclusionPatients();	// transfer exclusion patients to GlobalMatch so get global id
+		assignUnMatchedGlobalIds();		// go assign global ids for patients without global ids
 		
 		writeAtomicIntegerSeed();				// go save current value of next globalId
-		if (db != null) {
-			try {
-				db.close();
-			} catch (SQLException e) { /* ignored */}
-		}
+		
+		//if (db != null) {			// don't close to allow multiple runs of match rules
+		//	try {
+		//		db.close();
+		//	} catch (SQLException e) { /* ignored */}
+		//}
 	}
 	
 	public static void resetGlobalIds() {
@@ -483,8 +522,70 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		
+		// consolidate matching patients from patGlobalIdMap into 1 list per match
+		Map<Integer, List<Integer>> patIdConsolidated = new HashMap<Integer, List<Integer>>();
+		//Map.Entry<Integer, List<Integer>> entry1 = patGlobalIdMap.entrySet().stream().findFirst().get(); //1st entry
+		//Integer key1 = patGlobalIdMap.keySet().stream().findFirst().get();		//key of the first entry
+		List<Integer> value1 = patGlobalIdMap.values().stream().findFirst().get();	//get value of the first entry
+		Integer keyId = value1.get(0);
+		patIdConsolidated.put(keyId, value1);	// copy 1st entry to consolidated map, store under 1st integer
+
 		for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each group
+			//Integer patGlobalIdMapEntry = entry.getKey();
+			List<Integer> patList = entry.getValue();		// get list of 2 matching pats in this group
+
+			Integer pat1 = patList.get(0);		// will be 2 entries from patGlobalIdMap
+			Integer pat2 = patList.get(1);
+
+			List<Integer> patListAdd;
+			if (patIdConsolidated.containsKey(pat1)) {		// see if either pat already in consolidated map
+				patListAdd = patIdConsolidated.get(pat1);
+				if (!patListAdd.contains(pat2)) {
+					patListAdd.add(pat2);
+					patIdConsolidated.put(pat1, patListAdd);
+				}
+			} else if (patIdConsolidated.containsKey(pat2)) {
+				patListAdd = patIdConsolidated.get(pat2);
+				if (!patListAdd.contains(pat1)) {
+					patListAdd.add(pat1);
+					patIdConsolidated.put(pat2, patListAdd);
+				}
+			} else {
+				boolean found = false;			// else check if either pat already in lists under another pat
+				Integer targetKey = 0;
+				for (Map.Entry<Integer, List<Integer>> entry9 : patIdConsolidated.entrySet()) { // loop thru what is there so far
+					Integer key9 = entry9.getKey();
+					List<Integer> list9 = entry9.getValue();
+					if (list9.contains(pat1)) {
+						targetKey = key9;
+						found = true;
+						break;
+					}
+					if (list9.contains(pat2)) {
+						targetKey = key9;
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
+					patIdConsolidated.put(pat1, patList);	// if not found new entry, store under 1st pat
+				} else {
+					List<Integer> targetList = patIdConsolidated.get(targetKey);	// else add pats to this list
+					if (!targetList.contains(pat1)) {
+						targetList.add(pat1);
+					}
+					if (!targetList.contains(pat2)) {
+						targetList.add(pat2);
+					}
+					patIdConsolidated.put(targetKey, targetList);
+				}
+			}
+		}
+		//patIdConsolidated.forEach((k, v) -> System.out.println(("consolidated: " + k + ": " + v)));	// print out - Java 8
+		//*** end of pat consolidation
+
+		//for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each group
+		for (Map.Entry<Integer, List<Integer>> entry : patIdConsolidated.entrySet()) { // loop thru each group
 
 			//Integer patGlobalIdMapEntry = entry.getKey();
 			List<Integer> patList = entry.getValue();			// get list of matching pats in this group
@@ -1005,7 +1106,7 @@ public class GlobalMatchSqlite {
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
 							ResultSet rset9 = pstmt9.executeQuery();
 							while (rset9.next()) {
-								String tempName = rset9.getString("name");		// get data from this resultset row
+								//String tempName = rset9.getString("name");		// get data from this resultset row
 								int tempRowId = rset9.getInt("rowId");
 								if (rowId != tempRowId) {
 									currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
@@ -1629,26 +1730,6 @@ public class GlobalMatchSqlite {
 		String name = fileToRename.substring(0, index + 1);
 		return name + newExtension;
 	}
-
-	/*
-	private static String getFileDir(String fullFilePath) {
-		String fullName = changeDirectorySeparator(fullFilePath);	// check if Windows separator
-		String fileDir = fullName.substring(0, fullName.lastIndexOf("/")+1);
-		return fileDir;
-	}
-
-	private static String getFileName(String fullFilePath) {
-		String fileName = null;
-		String fullName = changeDirectorySeparator(fullFilePath);	// check if Windows separator
-		int dotIndex = fullName.lastIndexOf(".");					// see if file type present
-		if (dotIndex >= 0) {
-			fileName = fullName.substring(fullName.lastIndexOf("/")+1, dotIndex);
-		} else {
-			fileName = fullName.substring(fullName.lastIndexOf("/")+1);
-		}
-		return fileName;
-	}
-	*/
 
 	private static String getFileExtension(String fullFilePath) {
 		String fullName = changeDirectorySeparator(fullFilePath);	// check if Windows separator

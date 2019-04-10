@@ -176,7 +176,7 @@ public class GlobalMatchTasks extends Application {
 				final int currentStep = 2;
 				Task<Void> task2 = new Task<Void>() {			// do task in separate thread
 					@Override protected Void call() throws Exception {
-						updateMessage("Running match rules\nResetting all Global Ids to 0\nChecking for derived (alias) patients");
+						updateMessage("Running match rules\nReloading GlobalMatch Table\nChecking for derived (alias) patients");
 						projectRoot = baseDirectory.getText();			// get which project working on
 						gMatch = new GlobalMatchSqlite(projectRoot);	// create instance of global match
 						gMatch.runMatchRules(currentStep, ruleList);	// go do global patient match
