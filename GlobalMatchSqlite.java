@@ -121,15 +121,19 @@ public class GlobalMatchSqlite {
 	}
 	
 	// constructor
-	public GlobalMatchSqlite(String projectRoot) {
+	public GlobalMatchSqlite(String projectRoot, Integer idSeed) {
 		System.out.println("Project Root path passed to constructor: " + projectRoot);
 		// read configuration properties file from config subdirectory
 		configRootPath = changeDirectorySeparator(projectRoot);		// change file separator if Windows
 		if (configRootPath.endsWith(directorySeparator)) {
 			configRootPath = configRootPath.substring(0, configRootPath.length() - 1 ); // remove last / 
 		}
-		System.out.println("in construct: " + projectRoot + "  cleaned: " + configRootPath);
 		readConfig(configRootPath);				// read config file and assign local variables
+		
+		if (idSeed > 0) {					// override config global id seed if value passed in
+			atomicIntegerSeed = idSeed;
+			globalId = new AtomicInteger(atomicIntegerSeed);	// set base Global id
+		}
 	}
 
 	private static String changeDirectorySeparator(String filePath) {
@@ -164,13 +168,17 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	public static void processInputFiles(int step) {
+	public static void processInputFiles(int step, String prefix, String suffix) {
 		exclusionPats = new ArrayList<String>();		// list of exclusion pats
 		String fullName = null;			// read hash files from input directory
 		tempMessage = "Step " + step + ": reading input files from: " + inputDir;
 		writeLog( logBegin, tempMessage, true);
 		
-		ArrayList<String> inputFiles = getFileNames1Dir(inputDir, inputFileNamePrefix, inputFileNameSuffix);	// go read files in directory
+		if (!prefix.isEmpty()) {
+			inputFileNamePrefix = prefix;	// if prefix, suffix passed in, override config
+			inputFileNameSuffix = suffix;
+		}
+		ArrayList<String> inputFiles = getFileNames1Dir(inputDir, inputFileNamePrefix, inputFileNameSuffix); // go read files in directory
 		if (inputFiles == null || inputFiles.size() == 0) {
 			tempMessage = "no input files found in directory " + inputDir;
 			writeLog(logWarning, tempMessage, true);
@@ -489,10 +497,7 @@ public class GlobalMatchSqlite {
 		writeAtomicIntegerSeed();				// go save current value of next globalId
 		
 		//if (db != null) {			// don't close to allow multiple runs of match rules
-		//	try {
-		//		db.close();
-		//	} catch (SQLException e) { /* ignored */}
-		//}
+		//	try {db.close();} catch (SQLException e) { /* ignored */} }
 	}
 	
 	public static void resetGlobalIds() {
@@ -522,32 +527,36 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		// consolidate matching patients from patGlobalIdMap into 1 list per match
+		if (patGlobalIdMap.size() == 0) {
+			tempMessage = "Found " + patGlobalIdMap.size() + " matching patient groups";
+			writeLog(logInfo, tempMessage, true);
+			return;
+		}
+		// consolidate matching patient pairs from patGlobalIdMap into 1 list per match
 		Map<Integer, List<Integer>> patIdConsolidated = new HashMap<Integer, List<Integer>>();
 		//Map.Entry<Integer, List<Integer>> entry1 = patGlobalIdMap.entrySet().stream().findFirst().get(); //1st entry
 		//Integer key1 = patGlobalIdMap.keySet().stream().findFirst().get();		//key of the first entry
-		List<Integer> value1 = patGlobalIdMap.values().stream().findFirst().get();	//get value of the first entry
-		Integer keyId = value1.get(0);
-		patIdConsolidated.put(keyId, value1);	// copy 1st entry to consolidated map, store under 1st integer
+		List<Integer> patList1 = patGlobalIdMap.values().stream().findFirst().get();	//get pat list of the first entry
+		Integer patKey1 = patList1.get(0);
+		patIdConsolidated.put(patKey1, patList1);	// copy 1st entry to consolidated map, store under 1st integer
 
-		for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each group
+		for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each pair
 			//Integer patGlobalIdMapEntry = entry.getKey();
 			List<Integer> patList = entry.getValue();		// get list of 2 matching pats in this group
-
-			Integer pat1 = patList.get(0);		// will be 2 entries from patGlobalIdMap
+			Integer pat1 = patList.get(0);					// will be 2 entries from patGlobalIdMap
 			Integer pat2 = patList.get(1);
 
-			List<Integer> patListAdd;
-			if (patIdConsolidated.containsKey(pat1)) {		// see if either pat already in consolidated map
+			List<Integer> patListAdd = new ArrayList<Integer>();
+			if (patIdConsolidated.containsKey(pat1)) {			// see if pat1 already in consolidated map
 				patListAdd = patIdConsolidated.get(pat1);
 				if (!patListAdd.contains(pat2)) {
-					patListAdd.add(pat2);
+					patListAdd.add(pat2);						// add pat2 if not already in list
 					patIdConsolidated.put(pat1, patListAdd);
 				}
-			} else if (patIdConsolidated.containsKey(pat2)) {
+			} else if (patIdConsolidated.containsKey(pat2)) {	// see if pat2 already in consolidated map
 				patListAdd = patIdConsolidated.get(pat2);
 				if (!patListAdd.contains(pat1)) {
-					patListAdd.add(pat1);
+					patListAdd.add(pat1);						// add pat2 if not already in list
 					patIdConsolidated.put(pat2, patListAdd);
 				}
 			} else {
@@ -568,7 +577,7 @@ public class GlobalMatchSqlite {
 					}
 				}
 				if (!found) {
-					patIdConsolidated.put(pat1, patList);	// if not found new entry, store under 1st pat
+					patIdConsolidated.put(pat1, patList);	// if not found put new entry, store under 1st pat
 				} else {
 					List<Integer> targetList = patIdConsolidated.get(targetKey);	// else add pats to this list
 					if (!targetList.contains(pat1)) {
@@ -626,7 +635,7 @@ public class GlobalMatchSqlite {
 			}
 
 			if (maxGlobalId == 0) {
-				maxGlobalId = globalId.incrementAndGet();	// no global id found, get next global Id
+				maxGlobalId = globalId.incrementAndGet();	// if no global id found, get next global Id
 				assignedGlobalIds++;	// increment count
 			}
 			for (Integer num : patList) {		// loop thru each pat in list
@@ -1970,7 +1979,7 @@ public class GlobalMatchSqlite {
 			connectDb();		// connect to database if no connection yet
 		}
 		String report1File = makeFilePath(outputDir, reportFileName) + dateTimeNowHL7() + ".txt";
-		tempMessage = "writing report to: " + report1File;	// show output file name
+		tempMessage = "writing report for site " + site + " to: " + report1File;	// show output file name
 		writeLog(logInfo, tempMessage, true);
 		
 		int lineCount = 0;
@@ -2006,11 +2015,8 @@ public class GlobalMatchSqlite {
 			// File writing/opening failed at some stage.
 			System.out.println("**Unable to write to  file " + report1File);
 		}
-		if (db != null) {
-			try {
-				db.close();
-			} catch (SQLException e) { /* ignored */}
-		}
+		//if (db != null) {		// don't close to allow multiple runs of tasks
+		//	try { db.close(); } catch (SQLException e) { /* ignored */} }
 	}
 
 	// store to Temp table with text primary key
@@ -2115,15 +2121,15 @@ public class GlobalMatchSqlite {
 		}
 
 		// read configuration properties file from config subdirectory
-		configRootPath = System.getenv("GLOBAL_MATCH_BASE");		// read root dir from System environment variable
+		//configRootPath = System.getenv("GLOBAL_MATCH_BASE");		// read root dir from System environment variable
 		configRootPath = changeDirectorySeparator(configRootPath);		// change file separator if Windows
 		System.out.println("System environment variable GLOBAL_MATCH_BASE: " + configRootPath);
 		readConfig(configRootPath);			// read config file
 
 		if (processStep == 1) {
-			processInputFiles(processStep);		// go process input files in input dir
+			processInputFiles(processStep, "", "");		// go process input files in input dir
 		} else {
-			runMatchRules(processStep, matchSequence);			// go run match rules
+			runMatchRules(processStep, matchSequence);	// go run match rules
 		}
 
 		writeAtomicIntegerSeed();				// go save current value of next globalId

@@ -16,7 +16,11 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar.ButtonData;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
@@ -28,11 +32,14 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.util.Pair;
 
 public class GlobalMatchTasks extends Application {
 	
 	private String projectRoot;
 	private GlobalMatchSqlite gMatch;
+	private String prefixText;
+	private String suffixText;
 
 	private BorderPane root = null;
 	private Button inputButton = new Button("Load Data");		// Create the Buttons
@@ -62,27 +69,27 @@ public class GlobalMatchTasks extends Application {
 		
 		// Create the ButtonBox
 		HBox buttonBox = new HBox();
-		buttonBox.setPrefWidth(110);		// set preferred width of nodes in HBox
+		buttonBox.setPrefWidth(110);	// set preferred width of nodes in HBox
 		buttonBox.setSpacing(5);		// set spacing between nodes
 		
 		baseDirectory = new TextField("");
 		baseDirectory.setPrefColumnCount(60);
 		runStatus = new Label("");
+		matchRule = new TextField("match rule");
+		matchRule.setPrefColumnCount(60);
 		message = new TextArea("");		// Create the TextAreas
 		message.setPrefColumnCount(60);
 		message.setPrefRowCount(5);
 		exception = new TextArea("");
 		exception.setPrefColumnCount(60);
 		exception.setPrefRowCount(3);
-		matchRule = new TextField("match rule");
-		matchRule.setPrefColumnCount(60);
-		
+
 		GridPane topGrid = new GridPane();
 		topGrid.setVgap(5);					//Set vertical gap 
-		topGrid.setHgap(10);					//Set vertical gap 
+		topGrid.setHgap(10);				//Set vertical gap 
 		topGrid.addRow(0, new Label("Project Root: "), baseDirectory);
 		topGrid.addRow(1, new Label("Processing: "), runStatus);
-	
+
 		// create match rule checkbox area
 		Label topLabel = new Label("Global Match Available Rules");
 		HBox topHBox = new HBox(topLabel);
@@ -92,7 +99,7 @@ public class GlobalMatchTasks extends Application {
 		//checkBoxGrid.setStyle("-fx-background-color: LIGHTBLUE;");
 		checkBoxGrid.setMinSize(450, 250);		//Setting size for the pane 
 		checkBoxGrid.setPadding(new Insets(10, 10, 10, 80)); // Insets(top, right, bottom, left)
-		checkBoxGrid.setVgap(10);	//Set vertical and horizontal gaps between columns
+		checkBoxGrid.setVgap(10);		//Set vertical and horizontal gaps between columns
 		checkBoxGrid.setHgap(70);  
 
 		Label checkBoxesLabel = new Label("Select match rule(s) to run");
@@ -112,7 +119,7 @@ public class GlobalMatchTasks extends Application {
 		}
 		checkBoxGrid.add(separator2, 0, 10, 2, 1);
 		// end of checkbox grid
-		
+
 		GridPane messageGrid = new GridPane();				// message areas grid
 		messageGrid.addRow(0, new Label("Match Rules:  "), matchRule);
 		messageGrid.addRow(1, new Label("Message: "), message);
@@ -131,19 +138,54 @@ public class GlobalMatchTasks extends Application {
 			if (targetDir.isEmpty() || (!targetDir.contains(directorySeparator) && !targetDir.contains("\\"))) {
 				exception.setText("Project root must contain directory separator\nExample:  C:/GlobalMatch");
 			} else {
+				//https://code.makery.ch/blog/javafx-dialogs-official/
+				//https://stackoverflow.com/questions/31556373/javafx-dialog-with-2-input-fields
+				// start of popup dialog for input file filters
+				Dialog<Pair<String, String>> dialog = new Dialog<>();  // Create the custom dialog.
+				dialog.setTitle("Select input file filters");
+				dialog.setHeaderText("Enter Prefix and Suffix for input file filters");
+				ButtonType okButtonType = new ButtonType("OK", ButtonData.OK_DONE);	// Set the button types
+				dialog.getDialogPane().getButtonTypes().addAll(okButtonType, ButtonType.CANCEL);
+
+				GridPane diagPane = new GridPane();		// gridpane to hold 2 input fields
+				diagPane.setHgap(10);
+				diagPane.setVgap(10);
+				diagPane.setPadding(new Insets(20, 150, 10, 10));
+				TextField prefix = new TextField();
+				prefix.setPromptText("Prefix");
+				TextField suffix = new TextField();
+				suffix.setPromptText("Suffix");
+				diagPane.add(new Label("Prefix:"), 0, 0);
+				diagPane.add(prefix, 1, 0);
+				diagPane.add(new Label("Suffix:"), 0, 1);
+				diagPane.add(suffix, 1, 1);
+				dialog.getDialogPane().setContent(diagPane);
+				Platform.runLater(() -> prefix.requestFocus());  // request focus for prefix field
+				// Convert the result to a prefix/suffix-pair when button is clicked.
+				dialog.setResultConverter(dialogButton -> {
+					if (dialogButton == okButtonType) {
+						return new Pair<>(prefix.getText(), suffix.getText());
+					}
+					return null;
+				});
+				Optional<Pair<String, String>> result = dialog.showAndWait();
+				result.ifPresent(pair -> {
+					prefixText = pair.getKey();		// get text that was entered
+					suffixText = pair.getValue();
+				});		//*** end of popup dialog
+				
 				// start of task1 in separate thread
 				final int currentStep = 1;
 				Task<Void> task1 = new Task<Void>() {
 					@Override protected Void call() throws Exception {
 						updateMessage("Begin processing input hash files");
 						projectRoot = baseDirectory.getText();			// get which project working on
-						gMatch = new GlobalMatchSqlite(projectRoot);	// create instance of global match
-						gMatch.processInputFiles(currentStep);			// go read input files
+						gMatch = new GlobalMatchSqlite(projectRoot, 0);	// create instance of global match
+						gMatch.processInputFiles(currentStep, prefixText, suffixText); // go read input files
 						updateMessage(message.getText() + "\nFinished processing input hash files\nCheck log for additional details.");
 						return null;
 					}
 				};
-				//message.textProperty().unbindBidirectional(task1.messageProperty()); // unbind from task
 				message.textProperty().bind(task1.messageProperty());	// bind message area for communication
 				runStatus.textProperty().bind(task1.stateProperty().asString());	// bind runStatus label for communication
 				//runStatus.textProperty().bind(task1.runningProperty().asString());	// bind runStatus label for communication
@@ -161,7 +203,8 @@ public class GlobalMatchTasks extends Application {
 		tt2.setText("Run match rules and assign Global Ids");
 		tt2.setStyle("-fx-font: normal bold 14 Helvetica; -fx-base: mistyrose; -fx-text-fill: orange;");
 		matchButton.setTooltip( tt2 );
-		matchButton.setOnAction( (event) -> {			// define on action event
+		matchButton.setOnAction( (event) -> {	// define on action event
+			Integer globalIdStart = 100;
 			clearMessageAreas();
 			List<Integer> checkedRules = getCheckedRules();
 			String targetDir = baseDirectory.getText().trim();
@@ -170,15 +213,27 @@ public class GlobalMatchTasks extends Application {
 			} else if (checkedRules.size() == 0) {
 				exception.setText("No match rule(s) selected");
 			} else {
+				// start of popup dialog to ask Global Id seed
+				TextInputDialog dialog2 = new TextInputDialog("");
+				dialog2.setTitle("Global Id Selection Dialog");
+				dialog2.setHeaderText("Select Global Id seed to use");
+				dialog2.setContentText("Please enter Global Id seed:");
+
+				Optional<String> result = dialog2.showAndWait();		// get result
+				if (result.isPresent()){
+					globalIdStart = Integer.valueOf(result.get());	// get seed, defaults to 100 above
+				}		// end of popup dialog
+				
 				// start of task2 in separate thread
 				final List<Integer> ruleList = checkedRules.stream()
 						.collect(Collectors.toList());		// copy list so is independent list - Java 8
 				final int currentStep = 2;
+				final Integer globalIdSeed = globalIdStart;
 				Task<Void> task2 = new Task<Void>() {			// do task in separate thread
 					@Override protected Void call() throws Exception {
 						updateMessage("Running match rules\nReloading GlobalMatch Table\nChecking for derived (alias) patients");
 						projectRoot = baseDirectory.getText();			// get which project working on
-						gMatch = new GlobalMatchSqlite(projectRoot);	// create instance of global match
+						gMatch = new GlobalMatchSqlite(projectRoot, globalIdSeed);	// create instance of global match
 						gMatch.runMatchRules(currentStep, ruleList);	// go do global patient match
 						updateMessage(message.getText() + "\nCompleted global patient match rules\nCheck log for additional details.");
 						return null;
@@ -191,7 +246,7 @@ public class GlobalMatchTasks extends Application {
 				// end of task2 in separate thread
 			}
 		});
-		
+
 		reportButton.setMinWidth(buttonBox.getPrefWidth());
 		reportButton.setStyle("-fx-font-weight: bold;");
 		Tooltip tt3 = new Tooltip();
@@ -203,20 +258,20 @@ public class GlobalMatchTasks extends Application {
 			clearMessageAreas();
 			String targetDir = baseDirectory.getText().trim();
 			if (targetDir.isEmpty() || (!targetDir.contains(directorySeparator) && !targetDir.contains("\\"))) {
-					exception.setText("Project root must contain directory separator\nExample:  C:/GlobalMatch");
+				exception.setText("Project root must contain directory separator\nExample:  C:/GlobalMatch");
 			} else {
-				//https://code.makery.ch/blog/javafx-dialogs-official/
-				TextInputDialog dialog = new TextInputDialog("");
-				dialog.setTitle("Site Selection Dialog");
-				dialog.setHeaderText("Select site id for report");
-				dialog.setContentText("Please enter site id:");
-				Optional<String> result = dialog.showAndWait();		// get result
+				// start of popup dialog to ask site
+				TextInputDialog dialog3 = new TextInputDialog("");
+				dialog3.setTitle("Site Selection Dialog");
+				dialog3.setHeaderText("Select site id for report");
+				dialog3.setContentText("Please enter site id:");
+				Optional<String> result = dialog3.showAndWait();		// get result
 				if (result.isPresent()){
-				    site = result.get();
+					site = result.get();
 				} else {
 					site = "xx";
 				}
-				//result.ifPresent(siteId -> siteId))  //Java 8
+				// end of popup dialog
 
 				// start of task3 in separate thread
 				final String targetSite = site;
@@ -224,7 +279,7 @@ public class GlobalMatchTasks extends Application {
 					@Override protected Void call() throws Exception {
 						updateMessage("Generating Report 1 from GlobalMatch table for site " + targetSite);
 						projectRoot = baseDirectory.getText();			// get which project working on
-						gMatch = new GlobalMatchSqlite(projectRoot);	// create instance of global match
+						gMatch = new GlobalMatchSqlite(projectRoot, 0);	// create instance of global match
 						gMatch.createReport1( targetSite );
 						updateMessage(message.getText() + "\nCompleted Report 1\nCheck log for additional details.");
 						//updateRunning("idle");
@@ -242,29 +297,29 @@ public class GlobalMatchTasks extends Application {
 		exitButton.setMinWidth(buttonBox.getPrefWidth());
 		exitButton.setStyle("-fx-font-weight: bold;");
 		exitButton.setOnAction( (event) -> {
-            	Platform.exit();
-        });
-		
+			Platform.exit();
+		});
+
 		helpButton.setMinWidth(buttonBox.getPrefWidth());
 		helpButton.setStyle("-fx-font-weight: bold;");
 		helpButton.setOnAction( (event) -> {
 			// show popup help https://code.makery.ch/blog/javafx-dialogs-official/
 			Alert alert = new Alert(AlertType.INFORMATION);
 			alert.setTitle("Global Matching Rules");
-			alert.setHeaderText(null);
+			alert.setHeaderText("Matching Rule Comparisons");
 			alert.setContentText(
-					"Rule 1:  column 1,2,5,9,10\n" +
-					"Rule 2:  column 3,4,6\n" +
-					"Rule 3:  column 1,1\n" +
-					"Rule 4:  column 1,2\n" +
-					"Rule 5:  column 1,5\n" +
-					"Rule 6:  column 1,9\n" +
-					"Rule 7:  column 1,10\n" +
-					"Rule 8:  column 3,3\n" +
-					"Rule 9:  column 3,4\n" +
-					"Rule 10: column 3,6\n" +
-					"Rule 11: column 7,7\n" +
-					"Rule 12: column 8,8");
+					"Rule 1:  column 1, 2, 5, 9, 10\n" +
+					"Rule 2:  column 3, 4, 6\n" +
+					"Rule 3:  column 1, 1\n" +
+					"Rule 4:  column 1, 2\n" +
+					"Rule 5:  column 1, 5\n" +
+					"Rule 6:  column 1, 9\n" +
+					"Rule 7:  column 1, 10\n" +
+					"Rule 8:  column 3, 3\n" +
+					"Rule 9:  column 3, 4\n" +
+					"Rule 10: column 3, 6\n" +
+					"Rule 11: column 7, 7\n" +
+					"Rule 12: column 8, 8");
 			alert.showAndWait();
 		});
 
@@ -317,5 +372,4 @@ public class GlobalMatchTasks extends Application {
 		matchRule.setText(sb.toString());
 		return checkedList;
 	}
-	
 }
