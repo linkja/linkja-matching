@@ -26,9 +26,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -87,8 +89,10 @@ public class GlobalMatchSqlite {
 	private static String tempMessage;
 	private static final String TempTableIdKey = "TempTableId";
 	private static final String TempTableTextKey = "TempTableText";
+	private static final String TempTableAllKey = "TempTableAllIndex";
 	private static final String nullEntry = "NULL";
 	private static final String nullEntryDelim = "NULL|";
+	private static boolean tempTableAllKeyCreated = false;
 	
 	private static final int logInfo = 0;		// normal log message
 	private static final int logWarning = 1;	// warning log message
@@ -98,10 +102,9 @@ public class GlobalMatchSqlite {
 	private static final int logSection = 5;	// config log message
 
 	private static Integer patGlobalIdCount = 0;
-	private static Map<Integer, List<Integer>> patGlobalIdMap = new HashMap<Integer, List<Integer>>(1000);
-	//private static HashSet<String> matchSet = new HashSet<String>(100);  // init capacity (def 16), load factor
-	private static List<Integer> matchSequence = new ArrayList<Integer>();
-	private static List<String> exclusionPats;
+	private static Map<Integer, List<Integer>> patGlobalIdMap;	// holds patient matches
+	private static List<Integer> matchSequence;					// holds match rules to run
+	private static List<String> exclusionPats;					// holds pats with exclusion flag
 
 	protected final static Map<Integer, String> matchRule = new HashMap<Integer, String>();
 	static {
@@ -123,6 +126,8 @@ public class GlobalMatchSqlite {
 	// constructor
 	public GlobalMatchSqlite(String projectRoot, Integer idSeed) {
 		System.out.println("Project Root path passed to constructor: " + projectRoot);
+		matchSequence = new ArrayList<Integer>();	// holds match rules to run
+		
 		// read configuration properties file from config subdirectory
 		configRootPath = changeDirectorySeparator(projectRoot);		// change file separator if Windows
 		if (configRootPath.endsWith(directorySeparator)) {
@@ -399,6 +404,9 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
+		
+		patGlobalIdMap = new HashMap<Integer, List<Integer>>(1000);	//declare again to clear previous
+		
 		//resetGlobalIds();				// go reset all Global Ids to 0
 		resetGlobalMatchTable();		// clear GlobalMatch Table and import from InclusionPatients
 		assignPatientAliasGlobalIds();	// assign Global Ids to patient aliases first
@@ -532,77 +540,68 @@ public class GlobalMatchSqlite {
 			writeLog(logInfo, tempMessage, true);
 			return;
 		}
-		// consolidate matching patient pairs from patGlobalIdMap into 1 list per match
-		Map<Integer, List<Integer>> patIdConsolidated = new HashMap<Integer, List<Integer>>();
-		//Map.Entry<Integer, List<Integer>> entry1 = patGlobalIdMap.entrySet().stream().findFirst().get(); //1st entry
-		//Integer key1 = patGlobalIdMap.keySet().stream().findFirst().get();		//key of the first entry
-		List<Integer> patList1 = patGlobalIdMap.values().stream().findFirst().get();	//get pat list of the first entry
-		Integer patKey1 = patList1.get(0);
-		patIdConsolidated.put(patKey1, patList1);	// copy 1st entry to consolidated map, store under 1st integer
+		
+		// consolidate matching patients from patGlobalIdMap into 1 list per match
+		Map<Integer, Set<Integer>> patIdConsolidated = new HashMap<Integer, Set<Integer>>();
+		
+		//Integer key1 = patGlobalIdMap.keySet().stream().findFirst().get();		 //key of the first entry
+		List<Integer> patList1 = patGlobalIdMap.values().stream().findFirst().get(); //get pat list of the first entry
+		Set<Integer> set1 = new HashSet<Integer>(patList1);			// convert arraylist to set to remove duplicates
+		Integer pat1 = set1.stream().findFirst().get();				// get 1st pat in set
+		
+		patIdConsolidated.put(pat1, set1);	// save 1st entry to consolidated map, store under 1st pat in set
 
-		for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each pair
+		for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each entry in map
 			//Integer patGlobalIdMapEntry = entry.getKey();
-			List<Integer> patList = entry.getValue();		// get list of 2 matching pats in this group
-			Integer pat1 = patList.get(0);					// will be 2 entries from patGlobalIdMap
-			Integer pat2 = patList.get(1);
+			List<Integer> patList = entry.getValue();				// get list of matching pats in this group
+			Set<Integer> patSet = new HashSet<Integer>(patList);	// convert arraylist to set to remove duplicates
 
-			List<Integer> patListAdd = new ArrayList<Integer>();
-			if (patIdConsolidated.containsKey(pat1)) {			// see if pat1 already in consolidated map
-				patListAdd = patIdConsolidated.get(pat1);
-				if (!patListAdd.contains(pat2)) {
-					patListAdd.add(pat2);						// add pat2 if not already in list
-					patIdConsolidated.put(pat1, patListAdd);
+			boolean mapKeyFound = false;
+			for (Integer element : patSet) {						// loop thru set of pats to see if any in map
+				if (patIdConsolidated.containsKey( element )) {		// if this pat already in consolidated map
+					Set<Integer> patSetAdd = patIdConsolidated.get( element ); // get that set, add all this set to it
+					patSetAdd.addAll( patSet );						// duplicates are eliminated
+					patIdConsolidated.put(element, patSetAdd);		// put back in map
+					mapKeyFound = true;
+					break;											// found one so exit loop
 				}
-			} else if (patIdConsolidated.containsKey(pat2)) {	// see if pat2 already in consolidated map
-				patListAdd = patIdConsolidated.get(pat2);
-				if (!patListAdd.contains(pat1)) {
-					patListAdd.add(pat1);						// add pat2 if not already in list
-					patIdConsolidated.put(pat2, patListAdd);
-				}
-			} else {
-				boolean found = false;			// else check if either pat already in lists under another pat
-				Integer targetKey = 0;
-				for (Map.Entry<Integer, List<Integer>> entry9 : patIdConsolidated.entrySet()) { // loop thru what is there so far
-					Integer key9 = entry9.getKey();
-					List<Integer> list9 = entry9.getValue();
-					if (list9.contains(pat1)) {
-						targetKey = key9;
-						found = true;
-						break;
+			}
+			if (!mapKeyFound) {	 // if no pat in set was a map key, check for pat in each consolidated set
+				boolean mapSetFound = false;
+				for (Map.Entry<Integer, Set<Integer>> tempEntry : patIdConsolidated.entrySet()) { // loop thru each group
+					Integer patKeyTemp = tempEntry.getKey();		// get map entry
+					Set<Integer> patSetTemp = tempEntry.getValue();
+					for (Integer element : patSet) {				// loop thru set to see if any pats in map set
+						if (patSetTemp.contains( element )) {		// if pat in set
+							patSetTemp.addAll( patSet );			// add all pats in set to map set
+							patIdConsolidated.put(patKeyTemp, patSetTemp);	// put back in map
+							mapSetFound = true;								// indicate have a match
+							break;											// found one set so exit loop
+						}
 					}
-					if (list9.contains(pat2)) {
-						targetKey = key9;
-						found = true;
-						break;
+					if (mapSetFound) {
+						break;							// stop if found set to add these pats to
 					}
 				}
-				if (!found) {
-					patIdConsolidated.put(pat1, patList);	// if not found put new entry, store under 1st pat
-				} else {
-					List<Integer> targetList = patIdConsolidated.get(targetKey);	// else add pats to this list
-					if (!targetList.contains(pat1)) {
-						targetList.add(pat1);
-					}
-					if (!targetList.contains(pat2)) {
-						targetList.add(pat2);
-					}
-					patIdConsolidated.put(targetKey, targetList);
+				if (!mapSetFound) {				// if pat not found as map key or in sets then store new entry
+					Integer pat1st = patSet.stream().findFirst().get();	// get 1st pat in list
+					patIdConsolidated.put(pat1st, patSet);				// put set in map under 1st pat
 				}
 			}
 		}
 		//patIdConsolidated.forEach((k, v) -> System.out.println(("consolidated: " + k + ": " + v)));	// print out - Java 8
-		//*** end of pat consolidation
+		//*** end of pat list consolidation
 
-		//for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each group
-		for (Map.Entry<Integer, List<Integer>> entry : patIdConsolidated.entrySet()) { // loop thru each group
+		// loop thru each consolidated set, find any existing global ids, give one global id to all in set 
+		for (Map.Entry<Integer, Set<Integer>> entry : patIdConsolidated.entrySet()) { // loop thru each group
 
 			//Integer patGlobalIdMapEntry = entry.getKey();
-			List<Integer> patList = entry.getValue();			// get list of matching pats in this group
-			matchingPatGroups++;								// increment count of matching groups
+			Set<Integer> patSet = entry.getValue();			// get set of matching pats in this group
+			matchingPatGroups++;							// increment count of matching groups
 
 			int patCount = 0;
-			StringBuilder sb1 = new StringBuilder();
-			for (Integer num : patList) {
+			StringBuilder sb1 = new StringBuilder();		// build string with all ids of set
+			for (Integer num : patSet) {
 				patCount++;
 				if (patCount == 1) {
 					sb1.append(num.toString());
@@ -611,17 +610,16 @@ public class GlobalMatchSqlite {
 				}
 			}
 			Integer maxGlobalId = 0;
-			String sql1 = "SELECT globalId FROM GlobalMatch WHERE id IN (" + sb1.toString() + ")";
+			String sql1 = "SELECT globalId FROM GlobalMatch WHERE id IN (" + sb1.toString() + ")"; // create sql 
 			try ( PreparedStatement pstmt1 = db.prepareStatement(sql1)) {	// check if any already have global id
 				pstmt1.setFetchSize(100);				//number of rows to be fetched when needed
 				ResultSet resultSet = pstmt1.executeQuery();
 				while (resultSet.next()) {				// get max global Id from this group
-
 					Integer currGlobalId = resultSet.getInt("globalId");
 					if (currGlobalId > 0) {
 						if (currGlobalId < patAliasGlobalIdCutoff) {
 							maxGlobalId = currGlobalId;		// if alias pat global id found, use that for all
-							break;
+							break;							// exit loop with alias pat global id
 						} else if (maxGlobalId < currGlobalId) {
 							maxGlobalId = currGlobalId;		// else keep track of max globalId
 						}
@@ -634,15 +632,14 @@ public class GlobalMatchSqlite {
 				System.out.println(e.getMessage());
 			}
 
-			if (maxGlobalId == 0) {
-				maxGlobalId = globalId.incrementAndGet();	// if no global id found, get next global Id
+			if (maxGlobalId == 0) {							// if no global id found
+				maxGlobalId = globalId.incrementAndGet();	// get next global Id
 				assignedGlobalIds++;	// increment count
 			}
-			for (Integer num : patList) {		// loop thru each pat in list
-
+			for (Integer num : patSet) {	// loop thru each pat in set to update global id
 				String sql2 = "UPDATE GlobalMatch SET globalId = ? WHERE id = ?";
 				try ( PreparedStatement pstmt2 = db.prepareStatement(sql2)) {
-					pstmt2.setInt(1, maxGlobalId);		// set the corresponding param
+					pstmt2.setInt(1, maxGlobalId);		// set corresponding params
 					pstmt2.setInt(2, num);
 					pstmt2.executeUpdate();				// update this record 
 				} catch (SQLException e) {
@@ -780,10 +777,12 @@ public class GlobalMatchSqlite {
 		boolean currMatch = false;
 		boolean lastMatch = false;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
-
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
+		
+		createTempTableAllKey();		// go create and populate temp table to hold pats to compare
+		
 		// query database
 		String sqlQuery = "SELECT hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,id "  // must have all fields in index 
 				+ "FROM GlobalMatch INDEXED BY match0";					// create prepared statement
@@ -1092,57 +1091,48 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		createTempTableTextKey();		// go create temp table to hold pats to compare
+		//createTempTableTextKey();		// go create temp table to hold pats to compare
+		createTempTableAllKey();		// go create and populate temp table to hold pats to compare
 
-		for (int loop = 1; loop < 3; loop++) {	// loop 2 times, 1st to store hash2, 2nd to check if hash1=hash2
-			// query database
-			String sqlQuery = "SELECT hash1,hash2,id "  		// must have all fields in index 
-					+ "FROM GlobalMatch INDEXED BY match4";		// create prepared statement
-			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
-				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
-				while (resultSet.next()) {
-					String hash1 = resultSet.getString("hash1");		// get data from this resultset row
-					String hash2 = resultSet.getString("hash2");
-					int rowId = resultSet.getInt("id");
-				
-					if (loop == 1) {
-						if (hash2.equals(nullEntry) || hash2.isEmpty()) { continue;	} // skip to next if hash2 has null entry
-						storeToTempTableTextKey(hash2, rowId);	// save hash 2 to temp file 1st time through
-					} else {					// 2nd time through check if find match
-						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; } // if hash1 empty =nomatch, skip to next
-						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
-						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
-							ResultSet rset9 = pstmt9.executeQuery();
-							while (rset9.next()) {
-								//String tempName = rset9.getString("name");		// get data from this resultset row
-								int tempRowId = rset9.getInt("rowId");
-								if (rowId != tempRowId) {
-									currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
-									currGlobalIdGroup.add(tempRowId);
-									patientMatches++;
-								}
-							}
-							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
-								addToGlobalIdGroup( currGlobalIdGroup );
-								currGlobalIdGroup.clear();  // clear list for next match
-							}
-							if (rset9 != null) { rset9.close(); }
-						} 
+		String sqlQuery = "SELECT hash1,hash2,id "  		// query database, must have all fields in index 
+				+ "FROM GlobalMatch INDEXED BY match4";		// create prepared statement
+		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
+			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+			while (resultSet.next()) {
+				String hash1 = resultSet.getString("hash1");		// get data from this resultset row
+				String hash2 = resultSet.getString("hash2");
+				int rowId = resultSet.getInt("id");
+
+				if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; } // if hash1 empty =nomatch, skip to next
+				String sql9 = "SELECT hash2,rowId FROM " +TempTableAllKey+ " INDEXED BY index2 WHERE hash2 = '"+hash1+"'";
+				try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
+					ResultSet rset9 = pstmt9.executeQuery();
+					while (rset9.next()) {
+						//String tempName = rset9.getString("hash2");		// get data from this resultset row
+						int tempRowId = rset9.getInt("rowId");
+						if (rowId != tempRowId) {
+							currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
+							currGlobalIdGroup.add(tempRowId);
+							patientMatches++;
+						}
 					}
+					if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
+						addToGlobalIdGroup( currGlobalIdGroup );
+						currGlobalIdGroup.clear();  // clear list for next match
+					}
+					if (rset9 != null) { rset9.close(); }
 				}
-				if (loop > 1) {
-					tempMessage = "Match Rule 4 found: " + patientMatches + " patient matches";
-					writeLog(logInfo, tempMessage, true);
-				}
-				if (resultSet != null) {
-					resultSet.close();
-				}
-			} catch (SQLException e1) {
-				e1.printStackTrace();
-			} catch (Exception e1) {
-				e1.printStackTrace();	
 			}
+			tempMessage = "Match Rule 4 found: " + patientMatches + " patient matches";
+			writeLog(logInfo, tempMessage, true);
+			if (resultSet != null) {
+				resultSet.close();
+			}
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+		} catch (Exception e1) {
+			e1.printStackTrace();	
 		}
 	}
 
@@ -1152,58 +1142,49 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		createTempTableTextKey();		// go create temp table to hold pats to compare
+		//createTempTableTextKey();		// go create temp table to hold pats to compare
+		createTempTableAllKey();		// go create and populate temp table to hold pats to compare
 
-		for (int loop = 1; loop < 3; loop++) {	// loop 2 times, 1st to store hash5, 2nd to check if hash1=hash5
-			// query database
-			String sqlQuery = "SELECT hash1,hash5,id "  		// must have all fields in index 
-					+ "FROM GlobalMatch INDEXED BY match5";		// create prepared statement
-			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
-				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
-				while (resultSet.next()) {
-					String hash1 = resultSet.getString("hash1");		// get data from this resultset row
-					String hash5 = resultSet.getString("hash5");
-					int rowId = resultSet.getInt("id");
+		String sqlQuery = "SELECT hash1,hash5,id "  		// query database, must have all fields in index 
+				+ "FROM GlobalMatch INDEXED BY match5";		// create prepared statement
+		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
+			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+			while (resultSet.next()) {
+				String hash1 = resultSet.getString("hash1");		// get data from this resultset row
+				String hash5 = resultSet.getString("hash5");
+				int rowId = resultSet.getInt("id");
 
-					if (loop == 1) {
-						if (hash5.equals(nullEntry) || hash5.isEmpty()) { continue; } // skip to next if hash5 has null entry
-						storeToTempTableTextKey(hash5, rowId);	// save to temp file 1st time through
-					} else {									// 2nd time through check if find match
-						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; } // if hash1 empty =nomatch, skip to next
-						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
-						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
-							ResultSet rset9 = pstmt9.executeQuery();
-							while (rset9.next()) {
-								//String tempName = rset9.getString("name");		// get data from this resultset row
-								int tempRowId = rset9.getInt("rowId");
-								if (rowId != tempRowId) {
-									currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
-									currGlobalIdGroup.add(tempRowId);
-									patientMatches++;
-								}
-							}
-							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
-								addToGlobalIdGroup( currGlobalIdGroup );
-								currGlobalIdGroup.clear();  // clear list for next match
-							}
-							if (rset9 != null) { rset9.close(); }
-						} 
+				if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; } // if hash1 empty =nomatch, skip to next
+				String sql9 = "SELECT hash5,rowId FROM " +TempTableAllKey+ " INDEXED BY index5 WHERE hash5 = '"+hash1+"'";
+				try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
+					ResultSet rset9 = pstmt9.executeQuery();
+					while (rset9.next()) {
+						//String tempName = rset9.getString("hash5");	// get data from this resultset row
+						int tempRowId = rset9.getInt("rowId");
+						if (rowId != tempRowId) {
+							currGlobalIdGroup.add(rowId);			// save ids of these 2 matching patients
+							currGlobalIdGroup.add(tempRowId);
+							patientMatches++;
+						}
 					}
-				}
-				if (loop > 1) {
-					tempMessage = "Match Rule 5 found: " + patientMatches + " patient matches";
-					writeLog(logInfo, tempMessage, true);
-				}
-				if (resultSet != null) {
-					resultSet.close();
-				}
-			} catch (SQLException e1) {
-				e1.printStackTrace();
-			} catch (Exception e1) {
-				e1.printStackTrace();	
-			}	
-		}
+					if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
+						addToGlobalIdGroup( currGlobalIdGroup );
+						currGlobalIdGroup.clear();  // clear list for next match
+					}
+					if (rset9 != null) { rset9.close(); }
+				} 
+			}
+			tempMessage = "Match Rule 5 found: " + patientMatches + " patient matches";
+			writeLog(logInfo, tempMessage, true);
+			if (resultSet != null) {
+				resultSet.close();
+			}
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+		} catch (Exception e1) {
+			e1.printStackTrace();	
+		}	
 	}
 
 	private static void readGlobalMatchRule6(boolean keySame) {
@@ -1212,58 +1193,49 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		createTempTableTextKey();		// go create temp table to hold pats to compare
+		//createTempTableTextKey();		// go create temp table to hold pats to compare
+		createTempTableAllKey();		// go create and populate temp table to hold pats to compare
 
-		for (int loop = 1; loop < 3; loop++) {	// loop 2 times, 1st to store hash9, 2nd to check if hash1=hash9
-			// query database
-			String sqlQuery = "SELECT hash1,hash9,id "  		// must have all fields in index 
-					+ "FROM GlobalMatch INDEXED BY match6";		// create prepared statement
-			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
-				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				ResultSet resultSet = pstmt.executeQuery();		// executeQuery
-				while (resultSet.next()) {
-					String hash1 = resultSet.getString("hash1");		// get data from this resultset row
-					String hash9 = resultSet.getString("hash9");
-					int rowId = resultSet.getInt("id");
+		String sqlQuery = "SELECT hash1,hash9,id "  		// query database, must have all fields in index 
+				+ "FROM GlobalMatch INDEXED BY match6";		// create prepared statement
+		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
+			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery
+			while (resultSet.next()) {
+				String hash1 = resultSet.getString("hash1");		// get data from this resultset row
+				String hash9 = resultSet.getString("hash9");
+				int rowId = resultSet.getInt("id");
 
-					if (loop == 1) {
-						if (hash9.equals(nullEntry) || hash9.isEmpty()) { continue;	} // skip to next if hash9 is null entry
-						storeToTempTableTextKey(hash9, rowId);	// save to temp file 1st time through
-					} else {									// 2nd time through check if find match
-						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; } // if hash1 empty =nomatch, skip to next
-						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
-						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
-							ResultSet rset9 = pstmt9.executeQuery();
-							while (rset9.next()) {
-								//String tempName = rset9.getString("name");		// get data from this resultset row
-								int tempRowId = rset9.getInt("rowId");
-								if (rowId != tempRowId) {
-									currGlobalIdGroup.add(rowId);			// save ids of these 2  matching patients
-									currGlobalIdGroup.add(tempRowId);
-									patientMatches++;
-								}
-							}
-							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
-								addToGlobalIdGroup( currGlobalIdGroup );
-								currGlobalIdGroup.clear();  // clear list for next match
-							}
-							if (rset9 != null) { rset9.close(); }
-						} 
+				if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; } // if hash1 empty =nomatch, skip to next
+				String sql9 = "SELECT hash9,rowId FROM " +TempTableAllKey+ " INDEXED BY index9 WHERE hash9 = '"+hash1+"'";
+				try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
+					ResultSet rset9 = pstmt9.executeQuery();
+					while (rset9.next()) {
+						//String tempName = rset9.getString("hash9");		// get data from this resultset row
+						int tempRowId = rset9.getInt("rowId");
+						if (rowId != tempRowId) {
+							currGlobalIdGroup.add(rowId);			// save ids of these 2  matching patients
+							currGlobalIdGroup.add(tempRowId);
+							patientMatches++;
+						}
 					}
-				}
-				if (loop > 1) {
-					tempMessage = "Match Rule 6 found: " + patientMatches + " patient matches";
-					writeLog(logInfo, tempMessage, true);
-				}
-				if (resultSet != null) {
-					resultSet.close();
-				}
-			} catch (SQLException e1) {
-				e1.printStackTrace();
-			} catch (Exception e1) {
-				e1.printStackTrace();	
+					if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
+						addToGlobalIdGroup( currGlobalIdGroup );
+						currGlobalIdGroup.clear();  // clear list for next match
+					}
+					if (rset9 != null) { rset9.close(); }
+				} 
 			}
-		}	
+			tempMessage = "Match Rule 6 found: " + patientMatches + " patient matches";
+			writeLog(logInfo, tempMessage, true);
+			if (resultSet != null) {
+				resultSet.close();
+			}
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+		} catch (Exception e1) {
+			e1.printStackTrace();	
+		}
 	}
 
 	private static void readGlobalMatchRule7(boolean keySame) {
@@ -1272,57 +1244,48 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		createTempTableTextKey();		// go create temp table to hold pats to compare
-		
-		for (int loop = 1; loop < 3; loop++) {	// loop 2 times, 1st to store hash2, 2nd to check if hash1=hash10
-			// query database
-			String sqlQuery = "SELECT hash1,hash10,id "  		// must have all fields in index 
-					+ "FROM GlobalMatch INDEXED BY match7";		// create prepared statement
-			try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
-				pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
-				ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
-				while (resultSet.next()) {
-					String hash1 = resultSet.getString("hash1");		// get data from this resultset row
-					String hash10 = resultSet.getString("hash10");
-					int rowId = resultSet.getInt("id");
+		//createTempTableTextKey();		// go create temp table to hold pats to compare
+		createTempTableAllKey();		// go create and populate temp table to hold pats to compare
 
-					if (loop == 1) {
-						if (hash10.equals(nullEntry) || hash10.isEmpty()) { continue; }	// skip to next if hash10 is null entry
-						storeToTempTableTextKey(hash10, rowId);	// save to temp file 1st time through
-					} else {									// 2nd time through check if find match
-						if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
-						String sql9 = "SELECT name,rowId FROM " +TempTableTextKey+ " INDEXED BY index1 WHERE name = '"+hash1+"'";
-						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
-							ResultSet rset9 = pstmt9.executeQuery();
-							while (rset9.next()) {
-								//String tempName = rset9.getString("name");		// get data from this resultset row
-								int tempRowId = rset9.getInt("rowId");
-								if (rowId != tempRowId) {
-									currGlobalIdGroup.add(rowId);			// save ids of these 2  matching patients
-									currGlobalIdGroup.add(tempRowId);
-									patientMatches++;
-								}
-							}
-							if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
-								addToGlobalIdGroup( currGlobalIdGroup );
-								currGlobalIdGroup.clear();  // clear list for next match
-							}
-							if (rset9 != null) { rset9.close(); }
-						} 
+		String sqlQuery = "SELECT hash1,hash10,id "  		// query database, must have all fields in index 
+				+ "FROM GlobalMatch INDEXED BY match7";		// create prepared statement
+		try ( PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
+			pstmt.setFetchSize(1000);				//number of rows to be fetched when needed
+			ResultSet resultSet = pstmt.executeQuery();		// executeQuery (executeUpdate won't return result set)
+			while (resultSet.next()) {
+				String hash1 = resultSet.getString("hash1");		// get data from this resultset row
+				String hash10 = resultSet.getString("hash10");
+				int rowId = resultSet.getInt("id");
+
+				if (hash1.equals(nullEntry) || hash1.isEmpty()) { continue; }	// if hash1 empty =nomatch, skip to next
+				String sql9 = "SELECT hash10,rowId FROM " +TempTableAllKey+ " INDEXED BY index10 WHERE hash10 = '"+hash1+"'";
+				try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
+					ResultSet rset9 = pstmt9.executeQuery();
+					while (rset9.next()) {
+						//String tempName = rset9.getString("hash10");	// get data from this resultset row
+						int tempRowId = rset9.getInt("rowId");
+						if (rowId != tempRowId) {
+							currGlobalIdGroup.add(rowId);				// save ids of these 2  matching patients
+							currGlobalIdGroup.add(tempRowId);
+							patientMatches++;
+						}
 					}
-				}
-				if (loop > 1) {
-					tempMessage = "Match Rule 7 found: " + patientMatches + " patient matches";
-					writeLog(logInfo, tempMessage, true);
-				}
-				if (resultSet != null) {
-					resultSet.close();
-				}
-			} catch (SQLException e1) {
-				e1.printStackTrace();
-			} catch (Exception e1) {
-				e1.printStackTrace();	
+					if (currGlobalIdGroup !=null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
+						addToGlobalIdGroup( currGlobalIdGroup );
+						currGlobalIdGroup.clear();  // clear list for next match
+					}
+					if (rset9 != null) { rset9.close(); }
+				} 
 			}
+			tempMessage = "Match Rule 7 found: " + patientMatches + " patient matches";
+			writeLog(logInfo, tempMessage, true);
+			if (resultSet != null) {
+				resultSet.close();
+			}
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+		} catch (Exception e1) {
+			e1.printStackTrace();	
 		}
 	}
 
@@ -1901,6 +1864,53 @@ public class GlobalMatchSqlite {
 		}
 	}
 
+	// generate report
+	public static void createReport1(String site) {
+		String sql1;
+		if (db == null) {
+			connectDb();		// connect to database if no connection yet
+		}
+		String report1File = makeFilePath(outputDir, reportFileName) + dateTimeNowHL7() + ".txt";
+		tempMessage = "writing report for site " + site + " to: " + report1File;	// show output file name
+		writeLog(logInfo, tempMessage, true);
+		
+		int lineCount = 0;
+		Path path = Paths.get( report1File );
+		if (Files.notExists(path)) {
+			try { Files.createFile(path);						// create file if doesn't exist
+			} catch (IOException e) { e.printStackTrace(); }
+		}
+		try(    FileWriter fw = new FileWriter( report1File, true);  //try-with-resources --> autoclose
+				BufferedWriter bw = new BufferedWriter(fw);
+				PrintWriter out = new PrintWriter(bw)) {
+
+			if (!site.equalsIgnoreCase("All")) {
+				sql1 = "SELECT * FROM report1 WHERE siteId = '" + site + "'";
+			} else {
+				sql1 = "SELECT * FROM report1";
+			}
+			try ( PreparedStatement stmt1 = db.prepareStatement(sql1)) {
+				stmt1.setFetchSize(1000);				//number of rows to be fetched when needed
+				ResultSet rs1 = stmt1.executeQuery();
+				while (rs1.next()) {
+					lineCount++;
+					if (lineCount == 1) {
+						out.println("siteId,projectId,pathash,globalId");
+					}
+					out.println(rs1.getString("siteId")+","+rs1.getString("projectId")+","+rs1.getString("pidhash")+","+rs1.getString("globalId"));
+				}
+				if (rs1 != null) { rs1.close(); }
+			} catch (SQLException e) {
+				System.out.println(e.getMessage());
+			}
+		} catch( IOException e ) {
+			// File writing/opening failed at some stage.
+			System.out.println("**Unable to write to  file " + report1File);
+		}
+		//if (db != null) {		// don't close to allow multiple runs of tasks
+		//	try { db.close(); } catch (SQLException e) { /* ignored */} }
+	}
+
 	// store to Temp table with integer primary key
 	public static void storeToTempTableIdKey(Integer rowId, Integer gblId) {
 		if (db == null) {
@@ -1972,53 +1982,6 @@ public class GlobalMatchSqlite {
 		}
 	}
 	
-	// generate report
-	public static void createReport1(String site) {
-		String sql1;
-		if (db == null) {
-			connectDb();		// connect to database if no connection yet
-		}
-		String report1File = makeFilePath(outputDir, reportFileName) + dateTimeNowHL7() + ".txt";
-		tempMessage = "writing report for site " + site + " to: " + report1File;	// show output file name
-		writeLog(logInfo, tempMessage, true);
-		
-		int lineCount = 0;
-		Path path = Paths.get( report1File );
-		if (Files.notExists(path)) {
-			try { Files.createFile(path);						// create file if doesn't exist
-			} catch (IOException e) { e.printStackTrace(); }
-		}
-		try(    FileWriter fw = new FileWriter( report1File, true);  //try-with-resources --> autoclose
-				BufferedWriter bw = new BufferedWriter(fw);
-				PrintWriter out = new PrintWriter(bw)) {
-
-			if (!site.equalsIgnoreCase("All")) {
-				sql1 = "SELECT * FROM report1 WHERE siteId = '" + site + "'";
-			} else {
-				sql1 = "SELECT * FROM report1";
-			}
-			try ( PreparedStatement stmt1 = db.prepareStatement(sql1)) {
-				stmt1.setFetchSize(1000);				//number of rows to be fetched when needed
-				ResultSet rs1 = stmt1.executeQuery();
-				while (rs1.next()) {
-					lineCount++;
-					if (lineCount == 1) {
-						out.println("siteId,projectId,pathash,globalId");
-					}
-					out.println(rs1.getString("siteId")+","+rs1.getString("projectId")+","+rs1.getString("pidhash")+","+rs1.getString("globalId"));
-				}
-				if (rs1 != null) { rs1.close(); }
-			} catch (SQLException e) {
-				System.out.println(e.getMessage());
-			}
-		} catch( IOException e ) {
-			// File writing/opening failed at some stage.
-			System.out.println("**Unable to write to  file " + report1File);
-		}
-		//if (db != null) {		// don't close to allow multiple runs of tasks
-		//	try { db.close(); } catch (SQLException e) { /* ignored */} }
-	}
-
 	// store to Temp table with text primary key
 	public static void storeToTempTableTextKey(String nameKey, Integer rowId) {
 		if (db == null) {
@@ -2089,6 +2052,114 @@ public class GlobalMatchSqlite {
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
 		}
+	}
+
+	/*
+	// store to Temp table with all columns indexed
+	public static void storeToTempTableAllKey(String nameKey, Integer rowId) {
+		if (db == null) {
+			connectDb();		// connect to database if no connection yet
+		}
+		String sql8 = "INSERT INTO " + TempTableAllKey + " ("
+				+ "name,rowId) xxx "
+				+ "VALUES(?,?)";
+		try ( PreparedStatement pstmt8 = db.prepareStatement(sql8)) {
+			pstmt8.setString(1, nameKey);
+			pstmt8.setInt(2, rowId);
+			pstmt8.executeUpdate();			// store to database
+		} catch (SQLException e) {
+			System.out.println(e.getMessage());
+		}
+	}
+	*/
+
+	// create temp table with all columns indexed
+	public static void createTempTableAllKey() {
+		if (tempTableAllKeyCreated) {	// if already created just return
+			return;
+		}
+		if (db == null) {
+			connectDb();		// connect to database if no connection yet
+		}
+		boolean tableExists = false;
+		String sql0 = "SELECT name FROM sqlite_temp_master WHERE type = 'table' AND name = '" +TempTableAllKey+ "'";
+		try ( Statement stmt0 = db.createStatement() ) {
+			ResultSet rs0 = stmt0.executeQuery(sql0);
+			if (rs0.next()) {
+				tableExists = true;		// check if table already exists
+			} else {
+				tableExists = false; 
+			}
+			if (rs0 != null) { rs0.close(); }
+		} catch(SQLException ex) {
+			System.out.println(ex.getMessage());
+		}
+		if (!tableExists) {
+			String sqlCreate0 = "CREATE TEMP TABLE IF NOT EXISTS " + TempTableAllKey + " ("
+					+ "id integer PRIMARY KEY,"
+					+ "rowId integer,"
+					+ "hash1 text,"
+					+ "hash2 text,"
+					+ "hash3 text,"
+					+ "hash4 text,"
+					+ "hash5 text,"
+					+ "hash6 text,"
+					+ "hash7 text,"
+					+ "hash8 text,"
+					+ "hash9 text,"
+					+ "hash10 text)";	// SQL statement for creating a new table
+			try ( Statement stmt0 = db.createStatement() ) {
+				stmt0.execute(sqlCreate0);		// create a new table
+				System.out.println("new temp table created: " + TempTableAllKey);
+			} catch (SQLException e) {
+				System.out.println(e.getMessage());
+			}
+
+			for (int i = 1; i < 11; i++) {
+				String sqlCreate1 = "CREATE INDEX index"+ i +" ON " + TempTableAllKey + " (hash"+ i +",rowId)";
+				try ( Statement stmt1 = db.createStatement()) {
+					stmt1.execute(sqlCreate1);		// create index
+				} catch (SQLException e) {
+					System.out.println(e.getMessage());
+				}
+			}
+		}
+		
+		String sqlDelete = "DELETE FROM " + TempTableAllKey;	// delete existing records
+		try ( Statement stmt2 = db.createStatement() ) {
+			stmt2.execute(sqlDelete);		// execute statement
+			System.out.println("delete temp table records: " + TempTableAllKey);
+		} catch (SQLException e) {
+			System.out.println(e.getMessage());
+		}
+
+		int count = 0;
+		String sql9 = 		
+		"INSERT INTO " +TempTableAllKey+ " (rowId,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10) "+
+		"SELECT id,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10 FROM GlobalMatch";
+		try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) {
+			count = pstmt9.executeUpdate();			// store to database
+		} catch (SQLException e) {
+			System.out.println(e.getMessage());
+		}
+		tempTableAllKeyCreated = true;
+		tempMessage = "transferring " + count + " GlobalMatch patients to Temporary table";
+		writeLog(logInfo, tempMessage, true);
+		
+		/*
+		System.out.println("-----------------------");
+		try ( PreparedStatement pstmt9 = db.prepareStatement("SELECT * FROM " + TempTableAllKey + " LIMIT 20")) {
+			ResultSet rset9 = pstmt9.executeQuery();
+			while (rset9.next()) {
+				System.out.println("temp: " +" rowId: "+rset9.getInt("rowId")+"  "+ rset9.getString("hash1") );
+			}
+			if (rset9 != null) {
+				rset9.close();
+			}
+		} catch (SQLException e) {
+			System.out.println(e.getMessage());
+		}
+		*/
 	}
 
 	public static void main(String[] args) {
