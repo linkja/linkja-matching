@@ -406,7 +406,7 @@ public class GlobalMatchSqlite {
 			connectDb();		// connect to database if no connection yet
 		}
 		
-		patGlobalIdMap = new HashMap<Integer, List<Integer>>(1000);	//declare again to clear previous
+		patGlobalIdMap = new HashMap<Integer, List<Integer>>(1000);	//declare again to clear previous list
 		
 		//resetGlobalIds();				// go reset all Global Ids to 0
 		resetGlobalMatchTable();		// clear GlobalMatch Table and import from InclusionPatients
@@ -1757,6 +1757,7 @@ public class GlobalMatchSqlite {
 			dbName = prop.getProperty("DbName");
 			inputFileNamePrefix = prop.getProperty("InputFileNamePrefix");
 			inputFileNameSuffix = prop.getProperty("InputFileNameSuffix");
+			System.out.println("database: " + dbDirectory + dbName);
 			System.out.println("log file: " + logFile);
 
 			/*
@@ -2177,8 +2178,12 @@ public class GlobalMatchSqlite {
 		// read configuration properties file from config subdirectory
 		//configRootPath = System.getenv("GLOBAL_MATCH_BASE");		// read root dir from System environment variable
 		configRootPath = changeDirectorySeparator(configRootPath);		// change file separator if Windows
-		System.out.println("System environment variable GLOBAL_MATCH_BASE: " + configRootPath);
-		readConfig(configRootPath);			// read config file
+		if (configRootPath.endsWith(directorySeparator)) {
+			configRootPath = configRootPath.substring(0, configRootPath.length() - 1 ); // remove last / 
+		}
+		System.out.println("GLOBAL_MATCH_BASE directory: " + configRootPath);
+		matchSequence = new ArrayList<Integer>();	// holds match rules to run from config file
+		readConfig(configRootPath);					// read config file
 
 		if (processStep == 1) {
 			processInputFiles(processStep, "", "");		// go process input files in input dir
