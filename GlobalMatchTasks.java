@@ -1,15 +1,15 @@
 package externalSortPackage;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.time.format.DateTimeFormatter;
+//import java.io.FileInputStream;
+//import java.io.IOException;
+//import java.io.InputStream;
+//import java.net.URISyntaxException;
+//import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Properties;
+//import java.util.Properties;
 import java.util.stream.Collectors;
 
 import javafx.application.Application;
@@ -72,9 +72,9 @@ public class GlobalMatchTasks extends Application {
 	//private static String dbDirectory;
 	//private static String dbName;
 	//private static final String PROJECT_ROOT = "%ProjectRoot%";
+	//private static final String configFileName = "global-match.properties";
 
 	private static final DirectoryChooser directoryChooser = new DirectoryChooser();
-	private static final String configFileName = "global-match.properties";
 	private static final String directorySeparator = "/";
 	private final String[] checkBoxNames = new String[]{
 			"Rule 0","Rule 1","Rule 2","Rule 3","Rule 4","Rule 5","Rule 6",
@@ -83,7 +83,6 @@ public class GlobalMatchTasks extends Application {
 
 	public static void main(String[] args) {
 		configRootPath = "";
-		/*
 		try {
 			for (int param = 0; param < args.length; ++param) {
 				if (args[param].contains(directorySeparator) || args[param].contains("\\")) {	// check for project root
@@ -97,19 +96,19 @@ public class GlobalMatchTasks extends Application {
 			System.out.println("Valid params: Project Root,  Step number: 1=process input files and 2=run match rules.");
 			System.exit(-1);
 		}
-		*/
+
+		/*
 		try {
 			configRootPath = getJarPath();
-			inputFileNamePrefix = "Site";
-			inputFileNameSuffix = ".csv";
-		} catch (IOException | URISyntaxException e) {
-			e.printStackTrace();
-		}
+		} catch (IOException | URISyntaxException e) { e.printStackTrace(); }
+		*/
 		configRootPath = changeDirectorySeparator(configRootPath);		// change file separator if Windows
 		if (configRootPath.endsWith(directorySeparator)) {
 			configRootPath = configRootPath.substring(0, configRootPath.length() - 1 ); // remove last / 
 		}
 		//readConfig(configRootPath);					// read config file
+		inputFileNamePrefix = "Site";
+		inputFileNameSuffix = ".csv";
 		Application.launch(args);
 	}
 
@@ -440,6 +439,11 @@ public class GlobalMatchTasks extends Application {
 		matchRule.setText(sb.toString());
 		return checkedList;
 	}
+		
+	private static String changeDirectorySeparator(String filePath) {
+		return filePath.replaceAll("\\\\", directorySeparator);	// change dir separator if Windows
+	}
+
 	
 	/*
 	private static void readConfig(String projRoot) {
@@ -473,6 +477,7 @@ public class GlobalMatchTasks extends Application {
 	}
 	*/
 	
+	/*
 	private static String makeFilePath(String filePath, String fileName) {
 		filePath = changeDirectorySeparator(filePath);
 		if (filePath.endsWith(directorySeparator)) {
@@ -481,15 +486,14 @@ public class GlobalMatchTasks extends Application {
 			return filePath + directorySeparator + fileName;
 		}
 	}
-	
-	private static String changeDirectorySeparator(String filePath) {
-		return filePath.replaceAll("\\\\", directorySeparator);	// change dir separator if Windows
-	}
+	*/
 
+	/*
 	private static String getJarPath() throws IOException, URISyntaxException {
 		File f = new File(GlobalMatchTasks.class.getProtectionDomain().getCodeSource().getLocation().toURI());
 		String jarPath = f.getCanonicalPath().toString();
 		String jarDir = jarPath.substring( 0, jarPath.lastIndexOf( File.separator ));
 		return jarDir;
 	}
+	*/
 }
