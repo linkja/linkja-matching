@@ -1,9 +1,15 @@
 package externalSortPackage;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import javafx.application.Application;
@@ -31,6 +37,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.util.Pair;
 
@@ -38,11 +45,13 @@ public class GlobalMatchTasks extends Application {
 	
 	private String projectRoot;
 	private GlobalMatchSqlite gMatch;
+	private String selectedDirectory;
 	private String prefixText;
 	private String suffixText;
 
 	private BorderPane root = null;
-	private Button inputButton = new Button("Load Data");		// Create the Buttons
+	private Button rootButton = new Button("Root");			// Create the Buttons
+	private Button inputButton = new Button("Load Data");
 	private Button matchButton = new Button("Match Rules");
 	private Button reportButton = new Button("Report Data");
 	private Button helpButton = new Button("Help");
@@ -54,13 +63,53 @@ public class GlobalMatchTasks extends Application {
 	private TextArea exception;
 	private TextField matchRule;
 	
-	private final String directorySeparator = "/";
+	private static String configRootPath;
+	private static String inputFileNamePrefix;
+	private static String inputFileNameSuffix;
+	//private static String inputDir;
+	//private static String outputDir;
+	//private static String processedDir;
+	//private static String dbDirectory;
+	//private static String dbName;
+	//private static final String PROJECT_ROOT = "%ProjectRoot%";
+
+	private static final DirectoryChooser directoryChooser = new DirectoryChooser();
+	private static final String configFileName = "global-match.properties";
+	private static final String directorySeparator = "/";
 	private final String[] checkBoxNames = new String[]{
 			"Rule 0","Rule 1","Rule 2","Rule 3","Rule 4","Rule 5","Rule 6",
 			"Rule 7","Rule 8","Rule 9","Rule 10","Rule 11","Rule 12",};
 	private final CheckBox[] checkBoxGroup = new CheckBox[checkBoxNames.length];	// array of check boxes
 
 	public static void main(String[] args) {
+		configRootPath = "";
+		/*
+		try {
+			for (int param = 0; param < args.length; ++param) {
+				if (args[param].contains(directorySeparator) || args[param].contains("\\")) {	// check for project root
+					configRootPath = args[param];
+				} else if (args[param].equalsIgnoreCase("--directory") && args.length > param + 1) {
+					param++;
+					configRootPath = args[param];
+				}
+			}
+		} catch (Exception e){
+			System.out.println("Valid params: Project Root,  Step number: 1=process input files and 2=run match rules.");
+			System.exit(-1);
+		}
+		*/
+		try {
+			configRootPath = getJarPath();
+			inputFileNamePrefix = "Site";
+			inputFileNameSuffix = ".csv";
+		} catch (IOException | URISyntaxException e) {
+			e.printStackTrace();
+		}
+		configRootPath = changeDirectorySeparator(configRootPath);		// change file separator if Windows
+		if (configRootPath.endsWith(directorySeparator)) {
+			configRootPath = configRootPath.substring(0, configRootPath.length() - 1 ); // remove last / 
+		}
+		//readConfig(configRootPath);					// read config file
 		Application.launch(args);
 	}
 
@@ -72,7 +121,7 @@ public class GlobalMatchTasks extends Application {
 		buttonBox.setPrefWidth(110);	// set preferred width of nodes in HBox
 		buttonBox.setSpacing(5);		// set spacing between nodes
 		
-		baseDirectory = new TextField("");
+		baseDirectory = new TextField(configRootPath);
 		baseDirectory.setPrefColumnCount(60);
 		runStatus = new Label("");
 		matchRule = new TextField("match rule");
@@ -126,6 +175,25 @@ public class GlobalMatchTasks extends Application {
 		messageGrid.addRow(2, new Label("Exception:"), exception);
 
 		// Create the Event-Handlers for the Buttons
+		rootButton.setMinWidth(buttonBox.getPrefWidth());
+		rootButton.setStyle("-fx-font-weight: bold;");
+		Tooltip tt0 = new Tooltip();
+		tt0.setText("Set project root directory");
+		tt0.setStyle("-fx-font: normal bold 14 serif; -fx-base: mistyrose; -fx-text-fill: orange;");
+		rootButton.setTooltip( tt0 );
+		rootButton.setOnAction( event -> {
+			directoryChooser.setTitle("Select Project Root directory");		// Set title
+	        directoryChooser.setInitialDirectory(new File(configRootPath));	// Set Initial Directory
+	        //directoryChooser.setInitialDirectory(new File(System.getProperty("user.home")));
+			File selectedDirectoryFile = directoryChooser.showDialog(stage);
+			if(selectedDirectoryFile == null){
+				selectedDirectory = "";
+			}else{
+				selectedDirectory = selectedDirectoryFile.getAbsolutePath();
+			}
+			baseDirectory.setText(selectedDirectory);
+		});
+
 		inputButton.setMinWidth(buttonBox.getPrefWidth());
 		inputButton.setStyle("-fx-font-weight: bold;");
 		Tooltip tt1 = new Tooltip();
@@ -151,11 +219,11 @@ public class GlobalMatchTasks extends Application {
 				diagPane.setHgap(10);
 				diagPane.setVgap(10);
 				diagPane.setPadding(new Insets(20, 150, 10, 10));
-				TextField prefix = new TextField();
+				TextField prefix = new TextField(inputFileNamePrefix);	// set default value
 				prefix.setPromptText("Prefix");
-				TextField suffix = new TextField();
+				TextField suffix = new TextField(inputFileNameSuffix);	// set default value
 				suffix.setPromptText("Suffix");
-				diagPane.add(new Label("Prefix:"), 0, 0);
+				diagPane.add(new Label("Prefix:"), 0, 0);				// position inputfields
 				diagPane.add(prefix, 1, 0);
 				diagPane.add(new Label("Suffix:"), 0, 1);
 				diagPane.add(suffix, 1, 1);
@@ -214,9 +282,9 @@ public class GlobalMatchTasks extends Application {
 				exception.setText("No match rule(s) selected");
 			} else {
 				// start of popup dialog to ask Global Id seed
-				TextInputDialog dialog2 = new TextInputDialog("");
+				TextInputDialog dialog2 = new TextInputDialog("100");	// set default value
 				dialog2.setTitle("Global Id Selection Dialog");
-				dialog2.setHeaderText("Select Global Id seed to use");
+				dialog2.setHeaderText("Select Global Id seed to use");	// set title and header text
 				dialog2.setContentText("Please enter Global Id seed:");
 
 				Optional<String> result = dialog2.showAndWait();		// get result
@@ -324,7 +392,7 @@ public class GlobalMatchTasks extends Application {
 		});
 
 		// add buttons to ButtonBox
-		buttonBox.getChildren().addAll(inputButton,matchButton,reportButton,helpButton,exitButton);
+		buttonBox.getChildren().addAll(rootButton,inputButton,matchButton,reportButton,helpButton,exitButton);
 		
 		clearMessageAreas();
 		VBox centerVBox = new VBox();			// create VBox
@@ -371,5 +439,57 @@ public class GlobalMatchTasks extends Application {
 		}
 		matchRule.setText(sb.toString());
 		return checkedList;
+	}
+	
+	/*
+	private static void readConfig(String projRoot) {
+		
+		String configFilePath = makeFilePath(makeFilePath(projRoot, "config"), configFileName);  	// get config path
+
+		// read config data from properties file using try with resources, means autoclose
+		Properties prop = new Properties();
+		try ( InputStream input = new FileInputStream( configFilePath )) {
+			prop.load( input );
+			//configFileDir = prop.getProperty("ConfigFilesDirectory");
+			//inputDir = prop.getProperty("InputFilesDirectory");
+			//inputDir = changeDirectorySeparator(inputDir);				// change file separator if Windows
+			//inputDir = inputDir.replaceFirst(PROJECT_ROOT, projRoot);
+			//outputDir = prop.getProperty("OutputFilesDirectory");
+			//outputDir = changeDirectorySeparator(outputDir);			// change file separator if Windows
+			//outputDir = outputDir.replaceFirst(PROJECT_ROOT, projRoot);
+			//processedDir = prop.getProperty("ProcessedFilesDirectory");
+			//processedDir = changeDirectorySeparator(processedDir);		// change file separator if Windows
+			//processedDir = processedDir.replaceFirst(PROJECT_ROOT, projRoot);
+			//dbDirectory = prop.getProperty("DbDirectory");
+			//dbDirectory = dbDirectory.replaceFirst(PROJECT_ROOT, projRoot);
+			//dbName = prop.getProperty("DbName");
+			inputFileNamePrefix = prop.getProperty("InputFileNamePrefix");
+			inputFileNameSuffix = prop.getProperty("InputFileNameSuffix");
+		} catch (Exception e) {
+			//e.printStackTrace();
+			System.out.println("**read config error message: "+e.getMessage());
+			System.exit(1);
+		}
+	}
+	*/
+	
+	private static String makeFilePath(String filePath, String fileName) {
+		filePath = changeDirectorySeparator(filePath);
+		if (filePath.endsWith(directorySeparator)) {
+			return filePath + fileName;
+		} else {
+			return filePath + directorySeparator + fileName;
+		}
+	}
+	
+	private static String changeDirectorySeparator(String filePath) {
+		return filePath.replaceAll("\\\\", directorySeparator);	// change dir separator if Windows
+	}
+
+	private static String getJarPath() throws IOException, URISyntaxException {
+		File f = new File(GlobalMatchTasks.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+		String jarPath = f.getCanonicalPath().toString();
+		String jarDir = jarPath.substring( 0, jarPath.lastIndexOf( File.separator ));
+		return jarDir;
 	}
 }
