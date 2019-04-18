@@ -1,4 +1,4 @@
-package org.linkja.disambiguate;
+package org.linkja.matching;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -35,7 +35,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.apache.commons.io.FileUtils;
-import org.sqlite.SQLiteConfig.TransactionMode;
 
 public class GlobalMatchSqlite {
 

@@ -1,4 +1,4 @@
-package org.linkja.disambiguate;
+package org.linkja.matching;
 
 /**
  * Simple class used to estimate memory usage.

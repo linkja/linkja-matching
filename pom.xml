@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.linkja</groupId>
-    <artifactId>Disambiguate</artifactId>
+    <artifactId>Matching</artifactId>
     <version>0.1</version>
 
     <properties>
-        <main.runnable.class>org.linkja.disambiguate.Runner</main.runnable.class>
+        <main.runnable.class>org.linkja.matching.Runner</main.runnable.class>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>

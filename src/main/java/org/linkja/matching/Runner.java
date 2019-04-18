@@ -1,4 +1,4 @@
-package org.linkja.disambiguate;
+package org.linkja.matching;
 
 import java.util.Arrays;
 
