@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.apache.commons.io.FileUtils;
+import org.sqlite.SQLiteConfig.TransactionMode;
 
 public class GlobalMatchSqlite {
 
@@ -201,13 +202,23 @@ public class GlobalMatchSqlite {
 			String inputFile1 = fullName;
 			String invalidDataFile = changeFileExtension(inputFile1, "bad");
 			int recordsRead = 0;
+			int commitCount = 0;
 
 			tempMessage = "processing hash file: " + inputFile1;	// indicate input file
 			writeLog(logSection, tempMessage, true);
 			
+			try {
+				db.setAutoCommit(false);		// turn off AutoCommit to make storing faster
+			} catch (SQLException e1) {
+				e1.printStackTrace();
+			}
+			
 			File fileIn = new File(inputFile1);
 			try ( BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(fileIn), "UTF-8"))) {
 
+				final int batchSize = 100;		// number of records stored before commits	
+				recordsRead = 0;
+				
 				String line = null;
 				while ((line = br.readLine()) != null) {
 					recordsRead++;
@@ -244,6 +255,7 @@ public class GlobalMatchSqlite {
 						continue;			// skip to next record
 					}
 
+					//https://viralpatel.net/blogs/batch-insert-in-java-jdbc/
 					String sql = "INSERT INTO InclusionPatients ("
 							+"siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion,globalId) "
 							+ "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
@@ -266,8 +278,22 @@ public class GlobalMatchSqlite {
 						pstmt.setString(15, "0");
 
 						pstmt.executeUpdate();			// store data to database
+						commitCount++;
+						if (commitCount % batchSize == 0) {
+							db.commit();				// if at batchSize then do commit
+						}
 					} catch (SQLException e) {
 						System.out.println(e.getMessage());
+					}
+					if ((recordsRead % 10000) == 0) {
+						writeLog(logInfo, recordsRead+" records read", true);
+					}
+				}
+				if (commitCount > 0) {
+					try {
+						db.commit();
+					} catch (SQLException e) {
+						e.printStackTrace();
 					}
 				}
 			} catch (UnsupportedEncodingException e2) {
@@ -296,6 +322,13 @@ public class GlobalMatchSqlite {
 					writeLog(logSevere, tempMessage, true);
 				}
 			}
+		}
+		try {
+			db.setAutoCommit(true);		// turn AutoCommit back on
+			//db.close();
+			//db = null;
+		} catch (SQLException e) {
+			e.printStackTrace();
 		}
 		
 		saveExclusionPatients(exclusionPats);		// go save exclusion patients
@@ -2071,7 +2104,7 @@ public class GlobalMatchSqlite {
 
 		// read configuration properties file from config subdirectory
 		//configRootPath = System.getenv("GLOBAL_MATCH_BASE");		// read root dir from System environment variable
-		configRootPath = changeDirectorySeparator(configRootPath);		// change file separator if Windows
+		configRootPath = changeDirectorySeparator(configRootPath);	// change file separator if Windows
 		if (configRootPath.endsWith(directorySeparator)) {
 			configRootPath = configRootPath.substring(0, configRootPath.length() - 1 ); // remove last / 
 		}
