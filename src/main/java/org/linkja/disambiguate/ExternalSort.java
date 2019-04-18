@@ -1,4 +1,4 @@
-package externalSortPackage;
+package org.linkja.disambiguate;
 
 //filename: ExternalSort.java
 import java.io.BufferedReader;

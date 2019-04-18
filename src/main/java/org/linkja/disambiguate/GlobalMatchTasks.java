@@ -1,4 +1,4 @@
-package externalSortPackage;
+package org.linkja.disambiguate;
 
 import java.io.File;
 //import java.io.FileInputStream;
