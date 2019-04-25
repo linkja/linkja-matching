@@ -42,6 +42,9 @@ public class GlobalMatchSqlite {
 
 	private static final String SW_NAME    = "Global Patient Match";
 	private static final String SW_VERSION = " v1.0.beta";
+	private static final String SQL_Exception1 = "SQLITE_BUSY";
+	//private static final String File_Extension_CSV = ".csv";
+	private static final String File_Extension_TXT = ".txt";
 	private static String dbDirectory;
 	private static String dbName;
 	private static Connection db;
@@ -182,6 +185,7 @@ public class GlobalMatchSqlite {
 			//config.setEncoding(SQLiteConfig.Encoding.UTF_8);
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		} finally {
 		}
 	}
@@ -228,12 +232,17 @@ public class GlobalMatchSqlite {
 			tempMessage = "processing hash file: " + inputFile1;	// indicate input file
 			writeLog(logSection, tempMessage, true);
 			
+			boolean useCommaDelim = true;
+			if (inputFile1.endsWith(File_Extension_TXT)) {
+				useCommaDelim = false;			// check file delimiter to use
+			}
+			
 			doAutoCommit(false);	// turn off AutoCommit to make storing faster
 			
 			File fileIn = new File(inputFile1);
 			try ( BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(fileIn), "UTF-8"))) {
 
-				final int batchSize = 100;		// number of records stored before commits	
+				final int batchSize = 1000;		// number of records stored before commits	
 				recordsRead = 0;
 				
 				String line = null;
@@ -244,8 +253,13 @@ public class GlobalMatchSqlite {
 						continue;
 					}
 
+					String[] splitLine;
 					String lineIn = line.trim().replaceAll("\\s+", " ");	// reduce multiple spaces to single space
-					String[] splitLine = lineIn.split(delimComma);			// split incoming text
+					if (useCommaDelim) {
+						splitLine = lineIn.split(delimComma);	//split incoming text by , delimiter
+					} else {
+						splitLine = lineIn.split("\\|");		//split incoming text by | delimiter
+					}
 
 					// check that primary data is valid  - site id, project id and pidhash
 					boolean validData = true;
@@ -305,6 +319,7 @@ public class GlobalMatchSqlite {
 						}
 					} catch (SQLException e) {
 						System.out.println(e.getMessage());
+						if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 					}
 					if ((recordsRead % 10000) == 0) {
 						writeLog(logInfo, recordsRead+" records read", true);
@@ -358,31 +373,37 @@ public class GlobalMatchSqlite {
 		writeLog(logInfo, tempMessage, true);
 		
 		for (String entry : exclusionPats) {
-			String[] splitLine = entry.split(delimComma);			// split incoming text
+			String[] splitLine = null;
+			if (entry.contains(delimComma)) {
+				splitLine = entry.split(delimComma);	//split incoming text by , delimiter
+			} else {
+				splitLine = entry.split("\\|");			//split incoming text by | delimiter
+			}
 			String sql = "INSERT INTO ExclusionPatients ("
-				+"siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion,globalId) "
+				+"globalId,siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion) "
 				+ "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
 			try ( PreparedStatement pstmt = db.prepareStatement(sql)) {
-				pstmt.setString(1, splitLine[siteidIdx]);
-				pstmt.setString(2, splitLine[projectidIdx]);
-				pstmt.setString(3, splitLine[pidhashIdx]);
-				pstmt.setString(4, splitLine[hash1Idx]);
-				pstmt.setString(5, splitLine[hash2Idx]);
-				pstmt.setString(6, splitLine[hash3Idx]);
-				pstmt.setString(7, splitLine[hash4Idx]);
-				pstmt.setString(8, splitLine[hash5Idx]);
-				pstmt.setString(9, splitLine[hash6Idx]);
-				pstmt.setString(10, splitLine[hash7Idx]);
-				pstmt.setString(11, splitLine[hash8Idx]);
-				pstmt.setString(12, splitLine[hash9Idx]);
-				pstmt.setString(13, splitLine[hash10Idx]);
-				pstmt.setString(14, splitLine[exceptFlagIdx]);
-				pstmt.setInt(15, 0);
-
+				pstmt.setInt(1, 0);
+				pstmt.setString(2, splitLine[siteidIdx]);
+				pstmt.setString(3, splitLine[projectidIdx]);
+				pstmt.setString(4, splitLine[pidhashIdx]);
+				pstmt.setString(5, splitLine[hash1Idx]);
+				pstmt.setString(6, splitLine[hash2Idx]);
+				pstmt.setString(7, splitLine[hash3Idx]);
+				pstmt.setString(8, splitLine[hash4Idx]);
+				pstmt.setString(9, splitLine[hash5Idx]);
+				pstmt.setString(10, splitLine[hash6Idx]);
+				pstmt.setString(11, splitLine[hash7Idx]);
+				pstmt.setString(12, splitLine[hash8Idx]);
+				pstmt.setString(13, splitLine[hash9Idx]);
+				pstmt.setString(14, splitLine[hash10Idx]);
+				pstmt.setString(15, splitLine[exceptFlagIdx]);
+				
 				pstmt.executeUpdate();			// store to database
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
+				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 			}
 		}
 	}
@@ -418,6 +439,7 @@ public class GlobalMatchSqlite {
 				try { Thread.sleep(1000); } catch (InterruptedException e) {}  // pause to let catch up
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
+				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 			}
 		}
 		//try { db.commit(); } catch (SQLException e) { e.printStackTrace(); }
@@ -455,6 +477,7 @@ public class GlobalMatchSqlite {
 				count = pstmt1.executeUpdate();				// execute sql
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
+				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 			}
 		}
 		//try { db.commit(); } catch (SQLException e) { e.printStackTrace(); }
@@ -475,6 +498,7 @@ public class GlobalMatchSqlite {
 			count = pstmt1.executeUpdate();				// update this record
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 		tempMessage = count + " rows deleted from GlobalMatch";
 		writeLog(logTask, tempMessage, true);
@@ -545,6 +569,7 @@ public class GlobalMatchSqlite {
 			}
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 		writeLog(logInfo, recordsRead+" records transferred to GlobalMatch", true);
 	}
@@ -699,6 +724,7 @@ public class GlobalMatchSqlite {
 			count = pstmt.executeUpdate();	// update this record
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 		tempMessage = "finished resetting all global ids to 0";
 		writeLog(logTask, tempMessage, true);
@@ -809,6 +835,7 @@ public class GlobalMatchSqlite {
 				}
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
+				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 			}
 
 			if (maxGlobalId == 0) {							// if no global id found
@@ -823,12 +850,14 @@ public class GlobalMatchSqlite {
 					pstmt2.executeUpdate();				// update this record 
 				} catch (SQLException e) {
 					System.out.println(e.getMessage());
+					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 				}
 			}
 			try {
 					db.commit();
 			} catch (SQLException e) {
 					e.printStackTrace();
+					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 			}
 		}
 		doAutoCommit(true);		// turn AutoCommit back on
@@ -868,6 +897,7 @@ public class GlobalMatchSqlite {
 			}
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 		try {
 			db.commit();
@@ -888,6 +918,7 @@ public class GlobalMatchSqlite {
 			pstmt2.executeUpdate();				// update GlobalMatch record from temp table 
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 	}
 	
@@ -928,7 +959,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -954,6 +986,7 @@ public class GlobalMatchSqlite {
 				pstmt2.executeUpdate();				// update these record 
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
+				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 			}
 		}
 		if (patAliasLastGlobalId > 0) {
@@ -1054,7 +1087,8 @@ public class GlobalMatchSqlite {
 				resultSet1.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1140,7 +1174,8 @@ public class GlobalMatchSqlite {
 				resultSet1.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1212,7 +1247,8 @@ public class GlobalMatchSqlite {
 				resultSet1.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1283,7 +1319,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1333,7 +1370,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1383,7 +1421,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}	
@@ -1433,7 +1472,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1483,7 +1523,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1553,7 +1594,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1603,7 +1645,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1653,7 +1696,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1723,7 +1767,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -1793,7 +1838,8 @@ public class GlobalMatchSqlite {
 				resultSet.close();
 			}
 		} catch (SQLException e1) {
-			e1.printStackTrace();
+			System.out.println(e1.getMessage());
+			if (e1.getMessage().contains(SQL_Exception1)) { stopProcess(e1.getMessage()); }
 		} catch (Exception e1) {
 			e1.printStackTrace();	
 		}
@@ -2067,6 +2113,7 @@ public class GlobalMatchSqlite {
 			writeAtomicIntegerSeed();		// go save current value of next globalId
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 
 		String report1File = makeFilePath(outputDir, reportFileName) + dateTimeNowHL7() + ".txt";
@@ -2106,6 +2153,7 @@ public class GlobalMatchSqlite {
 				if (rs1 != null) { rs1.close(); }
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
+				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 			}
 		} catch( IOException e ) {
 			// File writing/opening failed at some stage.
@@ -2127,6 +2175,7 @@ public class GlobalMatchSqlite {
 			pstmt8.executeUpdate();			// store to database
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 		/*
 		try ( PreparedStatement pstmt9 = db.prepareStatement("SELECT * FROM " + TempTableIdKey)) {
@@ -2242,6 +2291,7 @@ public class GlobalMatchSqlite {
 			System.out.println("delete temp table records: " + TempTableAllKey);
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 
 		int count = 0;
@@ -2252,6 +2302,7 @@ public class GlobalMatchSqlite {
 			count = pstmt9.executeUpdate();			// store to database
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 		tempTableAllKeyCreated = true;
 		tempMessage = "transferring " + count + " GlobalMatch patients to Temporary table";
@@ -2269,8 +2320,16 @@ public class GlobalMatchSqlite {
 			}
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
 		*/
+	}
+	
+	public static void stopProcess(String errorMessage) {
+		writeLog(logInfo, "** Exception encountered during processing", true);
+		writeLog(logInfo, errorMessage, true);
+		writeLog(logInfo, "Please make sure DB Browser is not running", true);
+		System.exit(-1);
 	}
 
 	public static void main(String[] args) {
@@ -2327,14 +2386,13 @@ public class GlobalMatchSqlite {
 			return;
 		}
 
-		// read configuration properties file from config subdirectory
 		//configRootPath = System.getenv("GLOBAL_MATCH_BASE");		// read root dir from System environment variable
 		configRootPath = changeDirectorySeparator(configRootPath);	// change file separator if Windows
 		if (configRootPath.endsWith(directorySeparator)) {
 			configRootPath = configRootPath.substring(0, configRootPath.length() - 1 ); // remove last / 
 		}
 		System.out.println("GLOBAL_MATCH_BASE directory: " + configRootPath);
-		readConfig(configRootPath);					// read config file
+		readConfig(configRootPath);			// read configuration properties file from config subdirectory
 		
 		if (!tempMatchRules.isEmpty()) {	// if match rules passed in
 			matchSequence.clear();			// clear those read from properties file
