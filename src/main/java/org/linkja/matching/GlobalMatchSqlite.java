@@ -555,11 +555,6 @@ public class GlobalMatchSqlite {
 				if ((recordsRead % 10000) == 0) {
 					writeLog(logInfo, recordsRead+" records transferred to GlobalMatch", true);
 				}
-				if (quickTest) {
-					if (commitCount > 100000) {
-						break;
-					}
-				}
 			}
 			try {
 				db.commit();
@@ -605,6 +600,9 @@ public class GlobalMatchSqlite {
 	public static void runMatchRules(int step, List<Integer> ruleList) {
 		tempMessage = "Step " + step + ": Run patient match rule sequence " + ruleList;
 		writeLog(logBegin, tempMessage, true);
+		Integer currGlobalId = globalId.get();		// get (but don't increment) current global Id
+		tempMessage = "Global Id starting seed: " + currGlobalId;
+		writeLog(logInfo, tempMessage, true);
 		patGlobalIdMap = new HashMap<Integer, List<Integer>>(1000);	//declare again to clear previous list
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
@@ -2058,8 +2056,6 @@ public class GlobalMatchSqlite {
 				globalId = new AtomicInteger(atomicIntegerSeed);	// set base Global id
 				break;		// only 1 line in file so exit loop
 			}
-			String tempMessage = "Global Id starting seed: " + atomicIntegerSeed;
-			writeLog(logInfo, tempMessage, true);
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		} catch (FileNotFoundException e) {
