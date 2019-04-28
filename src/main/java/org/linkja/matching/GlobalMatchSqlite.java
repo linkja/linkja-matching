@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.io.FileUtils;
 import org.sqlite.SQLiteConfig;
-//import org.sqlite.SQLiteConfig.TransactionMode;
+import org.sqlite.SQLiteErrorCode;
 
 public class GlobalMatchSqlite {
 
@@ -94,7 +94,6 @@ public class GlobalMatchSqlite {
 
 	private static String tempMessage;
 	private static final String TempTableIdKey = "TempTableId";
-	//private static final String TempTableTextKey = "TempTableText";
 	private static final String TempTableAllKey = "TempTableAllIndex";
 	private static final String nullEntry = "NULL";
 	private static boolean tempTableAllKeyCreated = false;
@@ -104,7 +103,7 @@ public class GlobalMatchSqlite {
 	private static final int logSevere = 2;		// severe log message
 	private static final int logTask = 3;		// begin task log message
 	private static final int logBegin = 4;		// begin section log message
-	private static final int logSection = 5;	// config log message
+	private static final int logSection = 5;	// begin subsection log message
 
 	private static Integer patGlobalIdCount = 0;
 	private static Map<Integer, List<Integer>> patGlobalIdMap;	// holds patient matches
@@ -169,14 +168,13 @@ public class GlobalMatchSqlite {
 	public static void connectDb() {
 		db = null;
 		try {
-			// db parameters
 			String url = "jdbc:sqlite:" + dbDirectory + dbName;		// create url to database
 			writeLog(logInfo, "connecting to url: " + url, true);
 			db = DriverManager.getConnection(url);					// create connection to database
 			System.out.println("Connection to SQLite has been established.");
 			
 			SQLiteConfig config = new SQLiteConfig();
-			config.setCacheSize(10000);
+			config.setCacheSize(10000);					// set some helpful config values
 			config.setPageSize(8192);
 			config.setJournalMode(SQLiteConfig.JournalMode.OFF);
 			config.setSynchronous(SQLiteConfig.SynchronousMode.OFF);
@@ -213,7 +211,6 @@ public class GlobalMatchSqlite {
 		if (inputFiles == null || inputFiles.size() == 0) {
 			tempMessage = "no input files found in directory " + inputDir;
 			writeLog(logWarning, tempMessage, true);
-			//return;
 		}
 		tempTableAllKeyCreated = false;		// set flag so temp file has to be recreated
 		if (db == null) {
@@ -228,7 +225,6 @@ public class GlobalMatchSqlite {
 			String invalidDataFile = changeFileExtension(inputFile1, "bad");
 			int recordsRead = 0;
 			int commitCount = 0;
-
 			tempMessage = "processing hash file: " + inputFile1;	// indicate input file
 			writeLog(logSection, tempMessage, true);
 			
@@ -236,12 +232,10 @@ public class GlobalMatchSqlite {
 			if (inputFile1.endsWith(File_Extension_TXT)) {
 				useCommaDelim = false;			// check file delimiter to use
 			}
-			
 			doAutoCommit(false);	// turn off AutoCommit to make storing faster
 			
 			File fileIn = new File(inputFile1);
 			try ( BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(fileIn), "UTF-8"))) {
-
 				final int batchSize = 1000;		// number of records stored before commits	
 				recordsRead = 0;
 				
@@ -252,7 +246,6 @@ public class GlobalMatchSqlite {
 						System.out.println("skipping record " + recordsRead);
 						continue;
 					}
-
 					String[] splitLine;
 					String lineIn = line.trim().replaceAll("\\s+", " ");	// reduce multiple spaces to single space
 					if (useCommaDelim) {
@@ -276,13 +269,9 @@ public class GlobalMatchSqlite {
 						exclusionPats.add(lineIn);		// add this record to exclusionPats
 						continue;						// skip to next record
 					}
-					/* columns hash1 and up can be null or empty
-					if (splitLine[hash1Idx] == null || splitLine[hash1Idx].isEmpty() || splitLine[hash1Idx].equals("NULL")) {
-						validData = false;
-					}
-					*/
+					/* columns hash1 and up can be null or empty */
 					if (!validData) {
-						writeInvalidData( invalidDataFile, lineIn );	// write out data for later
+						writeInvalidData( invalidDataFile, lineIn );	// write out bad data for later
 						continue;			// skip to next record
 					}
 
@@ -368,7 +357,6 @@ public class GlobalMatchSqlite {
 	}
 	
 	public static void saveExclusionPatients(List<String> exclusionPats) {
-		
 		tempMessage = "storing " + exclusionPats.size() + " exclusion patient(s)";
 		writeLog(logInfo, tempMessage, true);
 		
@@ -408,7 +396,6 @@ public class GlobalMatchSqlite {
 		}
 	}
 	
-	
 	public static void indexGlobalMatchTable() {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
@@ -433,7 +420,6 @@ public class GlobalMatchSqlite {
 		for (int i = 0; i < indexSql.length; i++) {
 			tempMessage = "Indexing GlobalMatch Table Index " + i;
 			writeLog(logTask, tempMessage, true);
-			//String sqlDelete = "DELETE FROM GlobalMatch";	// delete existing records
 			try ( PreparedStatement pstmt1 = db.prepareStatement(indexSql[i]) ) {
 				pstmt1.executeUpdate();				// update this record
 				try { Thread.sleep(1000); } catch (InterruptedException e) {}  // pause to let catch up
@@ -448,7 +434,6 @@ public class GlobalMatchSqlite {
 	}
 	
 	public static void dropIndexGlobalMatchTable() {
-		int count = 0;
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
@@ -474,7 +459,7 @@ public class GlobalMatchSqlite {
 			writeLog(logTask, tempMessage, true);
 			//String sqlDelete = "DELETE FROM GlobalMatch";	// delete existing records
 			try ( PreparedStatement pstmt1 = db.prepareStatement(indexSql[i]) ) {
-				count = pstmt1.executeUpdate();				// execute sql
+				pstmt1.executeUpdate();				// execute sql
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
 				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
@@ -507,7 +492,6 @@ public class GlobalMatchSqlite {
 	}
 
 	public static void transferInclusionPatients() {
-		
 		tempMessage = "transferring Inclusion Patient(s) to GlobalMatch table";
 		writeLog(logInfo, tempMessage, true);
 		int recordsRead = 0;
@@ -571,30 +555,19 @@ public class GlobalMatchSqlite {
 
 	/*
 	public static void transferExclusionPatients() {
-
 		int count = 0;
 		String sql1 = 		
 		"INSERT INTO GlobalMatch (globalId,siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion) "+
 		"SELECT globalId,siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion FROM ExclusionPatients";
-		try ( PreparedStatement pstmt = db.prepareStatement(sql1)) {
-			count = pstmt.executeUpdate();			// store to database
+		try ( PreparedStatement pstmt1 = db.prepareStatement(sql1)) {
+			count = pstmt1.executeUpdate();			// store to database
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
 		}
 		tempMessage = "transferring " + count + " Exclusion Patient(s) to GlobalMatch table";
 		writeLog(logInfo, tempMessage, true);
-
-		/*
-		String sql2 = "DELETE from ExclusionPatients";
-		try ( PreparedStatement pstmt2 = db.prepareStatement(sql2)) {
-			pstmt2.executeUpdate();			// delete records
-		} catch (SQLException e) {
-			System.out.println(e.getMessage());
-		}
-		tempMessage = "deleting all records from ExclusionPatients table";
-		writeLog(logInfo, tempMessage, true);
-		*/
-	//}
+	}
+	*/
 
 	// step 2 run match rules as indicated
 	public static void runMatchRules(int step, List<Integer> ruleList) {
@@ -605,11 +578,9 @@ public class GlobalMatchSqlite {
 		writeLog(logInfo, tempMessage, true);
 		patGlobalIdMap = new HashMap<Integer, List<Integer>>(1000);	//declare again to clear previous list
 		if (db == null) {
-			connectDb();		// connect to database if no connection yet
+			connectDb();				// connect to database if no connection yet
 		}
-		
-		resetGlobalIds();		// go reset globalIds in GlobalMatch to 0
-		
+		resetGlobalIds();				// go reset globalIds in GlobalMatch to 0
 		assignPatientAliasGlobalIds();	// assign Global Ids to patient aliases first
 		
 		for (Integer currentRule : ruleList) {		// parse and run match rules
@@ -618,22 +589,9 @@ public class GlobalMatchSqlite {
 			int matchToIndex = ruleTextFull.indexOf(" matchto ");
 			String key1Part = ruleTextFull.substring(0, matchToIndex);
 			String key2Part = ruleTextFull.substring(matchToIndex + 9);
-			List<Integer> key1Index = new ArrayList<Integer>();		// holds index to columns in key1
-			List<Integer> key2Index = new ArrayList<Integer>();		// holds index to columns in key2
-			String[] key1Text = key1Part.split(delimComma);			// split key1 text
-			for (int i = 0; i < key1Text.length; i++) {	
-				key1Index.add( Integer.parseInt( key1Text[i]) );	// save key1 indexes in list
-			}
-			boolean keySame = false;						// indicates if key1 = key2
-			if (key1Part.equals(key2Part)) {
-				key2Index = key1Index.stream()
-						.collect(Collectors.toList());		// if key1 = key2, just copy key1 - Java 8							
+			boolean keySame = false;			// indicates if key1 = key2
+			if (key1Part.equals(key2Part)) {						
 				keySame = true;
-			} else {													// else parse key2
-				String[] key2Text = key2Part.split(delimComma);			// split key2 text
-				for (int i = 0; i < key2Text.length; i++) {	
-					key2Index.add( Integer.parseInt( key2Text[i]) );	// save key2 indexes in list
-				}
 			}
 			tempMessage = "Processing Match Rule " + currentRule;
 			writeLog(logInfo, tempMessage, true);
@@ -699,9 +657,7 @@ public class GlobalMatchSqlite {
 		}
 
 		assignMatchedGlobalIds();		// go assign global ids for matched patients
-		//transferExclusionPatients();	// transfer exclusion patients to GlobalMatch so will get global id
-		assignUnMatchedGlobalIds();		// go assign global ids for patients without global ids
-		
+		assignUnMatchedGlobalIds();		// go assign global ids for unmatched patients
 		writeAtomicIntegerSeed();		// go save current value of next globalId
 		
 		//if (db != null) {				// don't close to allow multiple runs of match rules
@@ -711,20 +667,18 @@ public class GlobalMatchSqlite {
 	public static void resetGlobalIds() {
 		tempMessage = "Resetting all global ids to 0";
 		writeLog(logTask, tempMessage, true);
-		int count = 0;
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-
 		String sqlUpdate = "UPDATE GlobalMatch SET globalId = 0 WHERE globalId > 0";
 		try ( PreparedStatement pstmt = db.prepareStatement(sqlUpdate)) {
 			pstmt.setFetchSize(1000);		//number of rows to be fetched when needed
-			count = pstmt.executeUpdate();	// update this record
+			pstmt.executeUpdate();			// update this record
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
 			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
-		tempMessage = "finished resetting all global ids to 0";
+		tempMessage = "finished resetting all GlobalMatch global ids to 0";
 		writeLog(logTask, tempMessage, true);
 	}
 
@@ -741,7 +695,6 @@ public class GlobalMatchSqlite {
 			writeLog(logInfo, tempMessage, true);
 			return;
 		}
-		
 		// consolidate matching patients from patGlobalIdMap into 1 list per match
 		Map<Integer, Set<Integer>> patIdConsolidated = new HashMap<Integer, Set<Integer>>();
 		
@@ -749,7 +702,6 @@ public class GlobalMatchSqlite {
 		List<Integer> patList1 = patGlobalIdMap.values().stream().findFirst().get(); //get pat list of the first entry
 		Set<Integer> set1 = new HashSet<Integer>(patList1);			// convert arraylist to set to remove duplicates
 		Integer pat1 = set1.stream().findFirst().get();				// get 1st pat in set
-		
 		patIdConsolidated.put(pat1, set1);	// save 1st entry to consolidated map, store under 1st pat in set
 
 		for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each entry in map
@@ -794,10 +746,8 @@ public class GlobalMatchSqlite {
 		//*** end of pat list consolidation
 
 		doAutoCommit(false);		// turn off AutoCommit to make storing faster
-
 		// loop thru each consolidated set, find any existing global ids, give one global id to all in set 
 		for (Map.Entry<Integer, Set<Integer>> entry : patIdConsolidated.entrySet()) { // loop thru each group
-
 			//Integer patGlobalIdMapEntry = entry.getKey();
 			Set<Integer> patSet = entry.getValue();			// get set of matching pats in this group
 			matchingPatGroups++;							// increment count of matching groups
@@ -872,7 +822,7 @@ public class GlobalMatchSqlite {
 		
 		createTempTableIdKey();		// go create temp table to hold pats without globalId
 		int commitCount = 0;
-		final int batchSize = 100;	// number of records stored before commits
+		final int batchSize = 500;	// number of records stored before commits
 		doAutoCommit(false);		// turn off AutoCommit to make storing faster
 
 		String sql3 = "SELECT id FROM GlobalMatch WHERE globalId = 0";	// get pats without globalId
@@ -2142,8 +2092,7 @@ public class GlobalMatchSqlite {
 					out.println(rs1.getString("siteId")+","+rs1.getString("projectId")+","+rs1.getString("pidhash")+","+rs1.getInt("globalId"));
 				}
 				
-				// add on excluded pats
-				for (String line : exclusionPats) {
+				for (String line : exclusionPats) {		// add on excluded pats
 					out.println(line);
 				}
 				if (rs1 != null) { rs1.close(); }
@@ -2173,19 +2122,6 @@ public class GlobalMatchSqlite {
 			System.out.println(e.getMessage());
 			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
-		/*
-		try ( PreparedStatement pstmt9 = db.prepareStatement("SELECT * FROM " + TempTableIdKey)) {
-			ResultSet rset9 = pstmt9.executeQuery();
-			while (rset9.next()) {
-				System.out.println("temp id: " + rset9.getInt("tempId") + " gblid: " + rset9.getInt("gblId"));
-			}
-			if (rset9 != null) {
-				rset9.close();
-			}
-		} catch (SQLException e) {
-			System.out.println(e.getMessage());
-		}
-		*/
 	}
 
 	// create temp table with integer primary key
@@ -2193,12 +2129,12 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		boolean tableExists = false;
+		boolean tableExists = false;			// check if table already exists
 		String sql0 = "SELECT name FROM sqlite_temp_master WHERE type = 'table' AND name = '" +TempTableIdKey+ "'";
 		try ( Statement stmt0 = db.createStatement() ) {
 			ResultSet rs0 = stmt0.executeQuery(sql0);
 			if (rs0.next()) {
-				tableExists = true;		// check if table already exists
+				tableExists = true;
 			} else {
 				tableExists = false; 
 			}
@@ -2209,35 +2145,36 @@ public class GlobalMatchSqlite {
 		if (!tableExists) {				// create table if doesn't exist
 			String sqlCreate1 = "CREATE TEMP TABLE IF NOT EXISTS " + TempTableIdKey + " ("
 					+ "tempId integer PRIMARY KEY,"
-					+ "gblId integer)";				// SQL statement for creating a new table
-			//String sqlCreate2 = "CREATE INDEX index1 ON " + TempTableIdKey + " (column1,column2)";
+					+ "gblId integer)";				// SQL statement for creating temp table
 			try (	Statement stmt1 = db.createStatement() ) {
-				//Statement stmt2 = db.createStatement()
 				stmt1.execute(sqlCreate1);			// create a new table
-				//stmt2.execute(sqlCreate2);		// create index
-				System.out.println("new temp table created: " + TempTableIdKey);
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
 			}
-		}
-		String sqlCreate3 = "DELETE FROM " + TempTableIdKey;	// delete existing records
-		try ( Statement stmt3 = db.createStatement() ) {
-			stmt3.execute(sqlCreate3);		// execute statement
-			System.out.println("delete temp table records: " + TempTableIdKey);
-		} catch (SQLException e) {
-			System.out.println(e.getMessage());
+			tempMessage = "new temporary table created: " + TempTableIdKey;
+			writeLog(logInfo, tempMessage, true);
+		
+		} else {			// else delete existing records
+			String sqlDelete3 = "DELETE FROM " + TempTableIdKey;
+			try ( Statement stmt3 = db.createStatement() ) {
+				stmt3.execute(sqlDelete3);		// execute statement
+				System.out.println("delete temp table records: " + TempTableIdKey);
+			} catch (SQLException e) {
+				System.out.println(e.getMessage());
+				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+			}
 		}
 	}
-	
+
 	// create temp table with all columns indexed
 	public static void createTempTableAllKey() {
 		if (tempTableAllKeyCreated) {	// if already created just return
 			return;
 		}
 		if (db == null) {
-			connectDb();		// connect to database if no connection yet
+			connectDb();				// connect to database if no connection yet
 		}
-		boolean tableExists = false;
+		boolean tableExists = false;	// check if temp table already exists
 		String sql0 = "SELECT name FROM sqlite_temp_master WHERE type = 'table' AND name = '" +TempTableAllKey+ "'";
 		try ( Statement stmt0 = db.createStatement() ) {
 			ResultSet rs0 = stmt0.executeQuery(sql0);
@@ -2251,7 +2188,7 @@ public class GlobalMatchSqlite {
 			System.out.println(ex.getMessage());
 		}
 		if (!tableExists) {
-			String sqlCreate0 = "CREATE TEMP TABLE IF NOT EXISTS " + TempTableAllKey + " ("
+			String sqlCreate1 = "CREATE TEMP TABLE IF NOT EXISTS " + TempTableAllKey + " ("
 					+ "id integer PRIMARY KEY,"
 					+ "rowId integer,"
 					+ "hash1 text,"
@@ -2264,46 +2201,60 @@ public class GlobalMatchSqlite {
 					+ "hash8 text,"
 					+ "hash9 text,"
 					+ "hash10 text)";	// SQL statement for creating a new table
-			try ( Statement stmt0 = db.createStatement() ) {
-				stmt0.execute(sqlCreate0);		// create a new table
-				System.out.println("new temp table created: " + TempTableAllKey);
+			try ( Statement stmt1 = db.createStatement() ) {
+				stmt1.execute(sqlCreate1);		// create a new table
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
 			}
-
-			for (int i = 1; i < 11; i++) {
-				String sqlCreate1 = "CREATE INDEX index"+ i +" ON " + TempTableAllKey + " (hash"+ i +",rowId)";
-				try ( Statement stmt1 = db.createStatement()) {
-					stmt1.execute(sqlCreate1);		// create index
+			tempMessage = "new temporary table created: " + TempTableAllKey;
+			writeLog(logInfo, tempMessage, true);
+		
+		} else {
+			for (int i = 1; i < 11; i++) {				// delete existing indexes
+				String sqlDelete2 = "DROP INDEX IF EXISTS index" + i;
+				try ( Statement stmt2 = db.createStatement()) {
+					stmt2.execute(sqlDelete2);		// delete index
 				} catch (SQLException e) {
 					System.out.println(e.getMessage());
+					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 				}
 			}
-		}
-		
-		String sqlDelete = "DELETE FROM " + TempTableAllKey;	// delete existing records
-		try ( Statement stmt2 = db.createStatement() ) {
-			stmt2.execute(sqlDelete);		// execute statement
-			System.out.println("delete temp table records: " + TempTableAllKey);
-		} catch (SQLException e) {
-			System.out.println(e.getMessage());
-			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+
+			String sqlDelete3 = "DELETE FROM " + TempTableAllKey;	// delete existing records
+			try ( Statement stmt3 = db.createStatement() ) {
+				stmt3.execute(sqlDelete3);		// execute statement
+			} catch (SQLException e) {
+				System.out.println(e.getMessage());
+				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+			}
 		}
 
+		// copy GlobalMatch patients to temp file, then index each column individually
 		int count = 0;
 		String sql9 = 		
-		"INSERT INTO " +TempTableAllKey+ " (rowId,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10) "+
-		"SELECT id,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10 FROM GlobalMatch";
+				"INSERT INTO " +TempTableAllKey+ " (rowId,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10) "+
+						"SELECT id,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10 FROM GlobalMatch";
 		try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) {
 			count = pstmt9.executeUpdate();			// store to database
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
 			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
-		tempTableAllKeyCreated = true;
 		tempMessage = "transferring " + count + " GlobalMatch patients to Temporary table";
 		writeLog(logInfo, tempMessage, true);
-		
+
+		for (int i = 1; i < 11; i++) {
+			String sql8 = "CREATE INDEX index"+ i +" ON " + TempTableAllKey + " (hash"+ i +",rowId)";
+			try ( Statement stmt8 = db.createStatement()) {
+				stmt8.execute(sql8);		// create index
+			} catch (SQLException e) {
+				System.out.println(e.getMessage());
+			}
+		}
+		tempTableAllKeyCreated = true;
+		tempMessage = "created indexes on Temporary table " + TempTableAllKey;
+		writeLog(logInfo, tempMessage, true);
+
 		/*
 		System.out.println("-----------------------");
 		try ( PreparedStatement pstmt9 = db.prepareStatement("SELECT * FROM " + TempTableAllKey + " LIMIT 20")) {
@@ -2318,9 +2269,9 @@ public class GlobalMatchSqlite {
 			System.out.println(e.getMessage());
 			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 		}
-		*/
+		 */
 	}
-	
+
 	public static void stopProcess(String errorMessage) {
 		writeLog(logInfo, "** Exception encountered during processing", true);
 		writeLog(logInfo, errorMessage, true);
