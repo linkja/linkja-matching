@@ -696,62 +696,64 @@ public class GlobalMatchSqlite {
 			return;
 		}
 		// consolidate matching patients from patGlobalIdMap into 1 list per match
-		Map<Integer, Set<Integer>> patIdConsolidated = new HashMap<Integer, Set<Integer>>();
+		ArrayList<Set<Integer>> patIdArray = new ArrayList<Set<Integer>>();
 		
 		//Integer key1 = patGlobalIdMap.keySet().stream().findFirst().get();		 //key of the first entry
 		List<Integer> patList1 = patGlobalIdMap.values().stream().findFirst().get(); //get pat list of the first entry
-		Set<Integer> set1 = new HashSet<Integer>(patList1);			// convert arraylist to set to remove duplicates
-		Integer pat1 = set1.stream().findFirst().get();				// get 1st pat in set
-		patIdConsolidated.put(pat1, set1);	// save 1st entry to consolidated map, store under 1st pat in set
+		Set<Integer> patSet1 = new HashSet<Integer>(patList1);		// convert arraylist to set to remove duplicates
+		patIdArray.add(patSet1);									// add first patients to consolidated list
 
+		int patGlobalIdMapCount = 0;
 		for (Map.Entry<Integer, List<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each entry in map
+			patGlobalIdMapCount++;
+			if (patGlobalIdMapCount % 50000 == 0) {
+				tempMessage = "consolidating match group "+patGlobalIdMapCount+ " array size: " +patIdArray.size();
+				writeLog(logInfo, tempMessage, true);
+			}
 			//Integer patGlobalIdMapEntry = entry.getKey();
 			List<Integer> patList = entry.getValue();				// get list of matching pats in this group
 			Set<Integer> patSet = new HashSet<Integer>(patList);	// convert arraylist to set to remove duplicates
+			
+			boolean entryFound = false;
+			for (int w = 0; w < patIdArray.size(); w++ ) {
+				Set<Integer> patSetConsol = patIdArray.get( w ); 		// get set previously consolidated
 
-			boolean mapKeyFound = false;
-			for (Integer element : patSet) {						// loop thru set of pats to see if any in map
-				if (patIdConsolidated.containsKey( element )) {		// if this pat already in consolidated map
-					Set<Integer> patSetAdd = patIdConsolidated.get( element ); // get that set, add all this set to it
-					patSetAdd.addAll( patSet );						// duplicates are eliminated
-					patIdConsolidated.put(element, patSetAdd);		// put back in map
-					mapKeyFound = true;
-					break;											// found one so exit loop
+				for (Integer element : patSet) {			// loop thru consolidated pats to see if found
+					if (patSetConsol.contains( element )) {	// if this pat already in consolidated set
+						patSetConsol.addAll( patSet );		// add this set to group, duplicates are eliminated
+						patIdArray.set(w, patSetConsol);		// put back in map
+						entryFound = true;
+						break;								// found entry so exit loop
+					}
+				}
+				if (entryFound) {
+					break;									// exit entire loop if found entry
 				}
 			}
-			if (!mapKeyFound) {	 // if no pat in set was a map key, check for pat in each consolidated set
-				boolean mapSetFound = false;
-				for (Map.Entry<Integer, Set<Integer>> tempEntry : patIdConsolidated.entrySet()) { // loop thru each group
-					Integer patKeyTemp = tempEntry.getKey();		// get map entry
-					Set<Integer> patSetTemp = tempEntry.getValue();
-					for (Integer element : patSet) {				// loop thru set to see if any pats in map set
-						if (patSetTemp.contains( element )) {		// if pat in set
-							patSetTemp.addAll( patSet );			// add all pats in set to map set
-							patIdConsolidated.put(patKeyTemp, patSetTemp);	// put back in map
-							mapSetFound = true;								// indicate have a match
-							break;											// found one set so exit loop
-						}
-					}
-					if (mapSetFound) {
-						break;							// stop if found set to add these pats to
-					}
-				}
-				if (!mapSetFound) {				// if pat not found as map key or in sets then store new entry
-					Integer pat1st = patSet.stream().findFirst().get();	// get 1st pat in list
-					patIdConsolidated.put(pat1st, patSet);				// put set in map under 1st pat
-				}
+			if (!entryFound) {
+				patIdArray.add(patSet);			// if no entry found, add new entry in consolidated list
 			}
 		}
-		//patIdConsolidated.forEach((k, v) -> System.out.println(("consolidated: " + k + ": " + v)));	// print out - Java 8
 		//*** end of pat list consolidation
+		tempMessage = "consolidated matching patient groups to " + patIdArray.size();
+		writeLog(logInfo, tempMessage, true);
 
 		doAutoCommit(false);		// turn off AutoCommit to make storing faster
-		// loop thru each consolidated set, find any existing global ids, give one global id to all in set 
-		for (Map.Entry<Integer, Set<Integer>> entry : patIdConsolidated.entrySet()) { // loop thru each group
-			//Integer patGlobalIdMapEntry = entry.getKey();
-			Set<Integer> patSet = entry.getValue();			// get set of matching pats in this group
+		// loop thru each consolidated set, find any existing global ids, give one global id to all in set
+		for (int x = 0; x < patIdArray.size(); x++ ) {
+
+			Set<Integer> patSet = patIdArray.get( x );
 			matchingPatGroups++;							// increment count of matching groups
 
+			if ( x % 5000 == 0) {
+				tempMessage = "updating globalId for matching patient group " + x;
+				writeLog(logInfo, tempMessage, true);
+				try { db.commit();
+				} catch (SQLException e) {
+					e.printStackTrace();
+					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+				}
+			}
 			int patCount = 0;
 			StringBuilder sb1 = new StringBuilder();		// build string with all ids of set
 			for (Integer num : patSet) {
@@ -765,7 +767,7 @@ public class GlobalMatchSqlite {
 			Integer maxGlobalId = 0;
 			String sql1 = "SELECT globalId FROM GlobalMatch WHERE id IN (" + sb1.toString() + ")"; // create sql 
 			try ( PreparedStatement pstmt1 = db.prepareStatement(sql1)) {	// check if any already have global id
-				pstmt1.setFetchSize(100);				//number of rows to be fetched when needed
+				pstmt1.setFetchSize(500);				//number of rows to be fetched when needed
 				ResultSet resultSet = pstmt1.executeQuery();
 				while (resultSet.next()) {				// get max global Id from this group
 					Integer currGlobalId = resultSet.getInt("globalId");
@@ -801,16 +803,16 @@ public class GlobalMatchSqlite {
 					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 				}
 			}
-			try {
-					db.commit();
-			} catch (SQLException e) {
-					e.printStackTrace();
-					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
-			}
 		}
-		doAutoCommit(true);		// turn AutoCommit back on
-		tempMessage = "Found " + matchingPatGroups + " matching patient groups";
-		writeLog(logInfo, tempMessage, true);
+		try {
+			db.commit();
+			doAutoCommit(true);		// turn AutoCommit back on
+		} catch (SQLException e) {
+			e.printStackTrace();
+			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+		}
+		//tempMessage = "Found " + matchingPatGroups + " matching patient groups";
+		//writeLog(logInfo, tempMessage, true);
 		tempMessage = "Assigned " + assignedGlobalIds + " new global ids to matching patients";
 		writeLog(logInfo, tempMessage, true);
 	}
@@ -1002,11 +1004,21 @@ public class GlobalMatchSqlite {
 				currVal[10] = resultSet1.getString("hash10");
 				int rowId = resultSet1.getInt("id");
 				
+				int[][] colMatrix = new int[columnCount+1][columnCount+1];
+				
 				for (int j = 1; j < columnCount; j++) {		// loop thru each column, check for match with other cols
 					if (currVal[j].equals(nullEntry) || currVal[j].isEmpty()) { continue; } // if col empty =nomatch, skip to next
 					
 					for (int k = 1; k < columnCount; k++) {		// loop thru each column
 						if (currVal[k].equals(nullEntry) || currVal[k].isEmpty()) { continue; } // if col empty =nomatch, skip to next
+						colMatrix[j][k]++;		// do each match only once
+						if (j != k) {
+							colMatrix[k][j]++;	// if j - k not equal increment opposite
+						}
+						if (colMatrix[j][k] > 1 || colMatrix[k][j] > 1) {
+							continue;			// if done before, skip to next
+						}
+						
 						String sql9 = "SELECT "+colName[k]+",rowId FROM " +TempTableAllKey+ " INDEXED BY " +indexName[k]+
 								" WHERE " + colName[k] + " = '" + currVal[j] + "'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
@@ -1017,12 +1029,12 @@ public class GlobalMatchSqlite {
 								if (rowId != tempRowId) {							// if not same patient, then is match
 									currGlobalIdGroup.add(rowId);					// save ids of these 2 matching patients
 									currGlobalIdGroup.add(tempRowId);
-									patientMatches++;
 								}
 							}
 							if (currGlobalIdGroup != null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
 								addToGlobalIdGroup( currGlobalIdGroup );
 								currGlobalIdGroup.clear();  // clear list for next match
+								patientMatches++;
 							}
 							if (rset9 != null) { rset9.close(); }
 						}
@@ -1043,10 +1055,15 @@ public class GlobalMatchSqlite {
 	}
 
 	private static void addToGlobalIdGroup(ArrayList<Integer> globalIdGroup) {
-		List<Integer> copyList = globalIdGroup.stream()
-				.collect(Collectors.toList());			// copy list so is independent list - Java 8
+		
+		Set<Integer> setConsolidated = new HashSet<Integer>(globalIdGroup);		// convert to set to remove dups
+		List<Integer> list = new ArrayList<Integer>(setConsolidated);
+		
+		//List<Integer> copyList = globalIdGroup.stream()
+		//		.collect(Collectors.toList());			// copy list so is independent list - Java 8
+		
 		patGlobalIdCount++;
-		patGlobalIdMap.put(patGlobalIdCount, copyList);		// save to map of matched patients
+		patGlobalIdMap.put(patGlobalIdCount, list);		// save to map of matched patients
 		//patGlobalIdMap.forEach((k, v) -> System.out.println((k + ":" + v)));	// print out - Java 8
 	}
 
@@ -1088,12 +1105,22 @@ public class GlobalMatchSqlite {
 				currVal[4] = resultSet1.getString("hash9");
 				currVal[5] = resultSet1.getString("hash10");
 				int rowId = resultSet1.getInt("id");
+				
+				int[][] colMatrix = new int[columnCount+1][columnCount+1];
 
 				for (int j = 1; j < columnCount; j++) {		// loop thru each column, check for match with other cols
 					if (currVal[j].equals(nullEntry) || currVal[j].isEmpty()) { continue; } // if col empty =nomatch, skip to next
 					
 					for (int k = 1; k < columnCount; k++) {		// loop thru each column
 						if (currVal[k].equals(nullEntry) || currVal[k].isEmpty()) { continue; } // if col empty =nomatch, skip to next
+						colMatrix[j][k]++;		// do each match only once
+						if (j != k) {
+							colMatrix[k][j]++;	// if j - k not equal increment opposite
+						}
+						if (colMatrix[j][k] > 1 || colMatrix[k][j] > 1) {
+							continue;			// if done before, skip to next
+						}
+						
 						String sql9 = "SELECT "+colName[k]+",rowId FROM " +TempTableAllKey+ " INDEXED BY " +indexName[k]+
 								" WHERE " + colName[k] + " = '" + currVal[j] + "'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
@@ -1104,12 +1131,12 @@ public class GlobalMatchSqlite {
 								if (rowId != tempRowId) {							// if not same patient, then is match
 									currGlobalIdGroup.add(rowId);					// save ids of these 2 matching patients
 									currGlobalIdGroup.add(tempRowId);
-									patientMatches++;
 								}
 							}
 							if (currGlobalIdGroup != null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
 								addToGlobalIdGroup( currGlobalIdGroup );
 								currGlobalIdGroup.clear();  // clear list for next match
+								patientMatches++;
 							}
 							if (rset9 != null) { rset9.close(); }
 						}
@@ -1151,7 +1178,7 @@ public class GlobalMatchSqlite {
 		String sqlQuery1 = "SELECT hash3,hash4,hash6,id "		// must have all fields in index 
 				+ "FROM GlobalMatch INDEXED BY match2";			// create prepared statement
 		try ( PreparedStatement pstmt1 = db.prepareStatement(sqlQuery1)) {
-			pstmt1.setFetchSize(100);							//number of rows to be fetched when needed
+			pstmt1.setFetchSize(1000);							//number of rows to be fetched when needed
 			ResultSet resultSet1 = pstmt1.executeQuery();		// executeQuery
 			int columnCount = resultSet1.getMetaData().getColumnCount();	// get column count
 			while (resultSet1.next()) {
@@ -1162,11 +1189,22 @@ public class GlobalMatchSqlite {
 				currVal[3] = resultSet1.getString("hash6");
 				int rowId = resultSet1.getInt("id");
 				
+				int[][] colMatrix = new int[columnCount+1][columnCount+1];
+				
 				for (int j = 1; j < columnCount; j++) {		// loop thru each column, check for match with other cols
 					if (currVal[j].equals(nullEntry) || currVal[j].isEmpty()) { continue; } // if col empty =nomatch, skip to next
 					
 					for (int k = 1; k < columnCount; k++) {		// loop thru each column
 						if (currVal[k].equals(nullEntry) || currVal[k].isEmpty()) { continue; } // if col empty =nomatch, skip to next
+						
+						colMatrix[j][k]++;		// do each match only once
+						if (j != k) {
+							colMatrix[k][j]++;	// if j - k not equal increment opposite
+						}
+						if (colMatrix[j][k] > 1 || colMatrix[k][j] > 1) {
+							continue;			// if done before, skip to next
+						}
+						
 						String sql9 = "SELECT "+colName[k]+",rowId FROM " +TempTableAllKey+ " INDEXED BY " +indexName[k]+
 								" WHERE " + colName[k] + " = '" + currVal[j] + "'";
 						try ( PreparedStatement pstmt9 = db.prepareStatement(sql9)) { 
@@ -1177,12 +1215,12 @@ public class GlobalMatchSqlite {
 								if (rowId != tempRowId) {							// if not same patient, then is match
 									currGlobalIdGroup.add(rowId);					// save ids of these 2 matching patients
 									currGlobalIdGroup.add(tempRowId);
-									patientMatches++;
 								}
 							}
 							if (currGlobalIdGroup != null && !currGlobalIdGroup.isEmpty()) {	// if have entry, then save
 								addToGlobalIdGroup( currGlobalIdGroup );
 								currGlobalIdGroup.clear();  // clear list for next match
+								patientMatches++;
 							}
 							if (rset9 != null) { rset9.close(); }
 						}
