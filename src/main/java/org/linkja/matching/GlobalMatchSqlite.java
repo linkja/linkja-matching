@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.io.FileUtils;
 import org.sqlite.SQLiteConfig;
 import org.sqlite.SQLiteErrorCode;
+import org.sqlite.SQLiteException;
 
 public class GlobalMatchSqlite {
 
@@ -690,7 +691,7 @@ public class GlobalMatchSqlite {
 			return;
 		}
 		// consolidate matching patients from patGlobalIdMap into lists where each pat included in only 1 group
-		ArrayList<Set<Integer>> patIdArray = new ArrayList<Set<Integer>>();		// holds match groups of unique pats
+		ArrayList<Set<Integer>> patIdArray = new ArrayList<Set<Integer>>(100000);	// holds match groups of unique pats
 		
 		//Integer key1 = patGlobalIdMap.keySet().stream().findFirst().get();		//key of the first entry
 		Set<Integer> patSet1 = patGlobalIdMap.values().stream().findFirst().get();	//get pat set of first entry
@@ -738,12 +739,18 @@ public class GlobalMatchSqlite {
 			matchingPatGroups++;							// increment count of matching groups
 
 			if ( x % 10000 == 0) {
-				tempMessage = "updating globalId for matching patient group " + x;
-				writeLog(logInfo, tempMessage, true);
-				try { db.commit();
-				} catch (SQLException e) {
-					e.printStackTrace();
-					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+				if (x > 0) {
+					tempMessage = "updating globalId for matching patient group " + x;
+					writeLog(logInfo, tempMessage, true);
+					try { db.commit();
+					} catch (SQLException e) {
+						e.printStackTrace();
+						if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+					} catch (Exception e) {
+						System.out.println("**Exception doing commit");
+						System.out.println(e.getMessage());
+						stopProcess(e.getMessage());
+					}
 				}
 			}
 			int patCount = 0;
@@ -775,9 +782,20 @@ public class GlobalMatchSqlite {
 				if (resultSet != null) {
 					resultSet.close();
 				}
+			} catch (SQLiteException e) {
+				System.out.println("sql1 = " + sql1);
+				System.out.println("SQLite error code: " + e.getErrorCode());
+				//if (e.getErrorCode() == SQLiteErrorCode.SQLITE_BUSY.code) { }
+				//if (e.getErrorCode() == SQLiteErrorCode.SQLITE_CONSTRAINT.code) { }
+				//if (code.equals(SQLiteErrorCode.SQLITE_NOTADB) || code.equals(SQLiteErrorCode.SQLITE_CORRUPT)) { }
+				stopProcess(e.getMessage());
 			} catch (SQLException e) {
+				System.out.println("sql1 = " + sql1);
+				System.out.println("SQL error code: " + e.getErrorCode());
 				System.out.println(e.getMessage());
 				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+			} catch (Exception e) {
+				stopProcess(e.getMessage());
 			}
 
 			if (maxGlobalId == 0) {							// if no global id found
@@ -790,18 +808,27 @@ public class GlobalMatchSqlite {
 					pstmt2.setInt(1, maxGlobalId);		// set corresponding params
 					pstmt2.setInt(2, num);
 					pstmt2.executeUpdate();				// update this record 
+				} catch (SQLiteException e) {
+					System.out.println("sql2 = " + sql2);
+					System.out.println("SQLite error code: " + e.getErrorCode());
+					System.out.println(e.getMessage());
+					//if (e.getErrorCode() == SQLiteErrorCode.SQLITE_BUSY.code) { }
+					stopProcess(e.getMessage());
 				} catch (SQLException e) {
+					System.out.println("sql2 = " + sql2);
 					System.out.println(e.getMessage());
 					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+				} catch (Exception e) {
+					stopProcess(e.getMessage());
 				}
 			}
 		}
 		try {
 			db.commit();
 			doAutoCommit(true);		// turn AutoCommit back on
-		} catch (SQLException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
-			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
+			stopProcess(e.getMessage());
 		}
 		tempMessage = "Assigned " + assignedGlobalIds + " new global ids to matching patients";
 		writeLog(logInfo, tempMessage, true);
