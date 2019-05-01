@@ -62,11 +62,11 @@ public class GlobalMatchSqlite {
 	private static String logFileDir;
 	private static final String logFileName = "match-log-";
 	private static final String reportFileName = "report1-";
-	private final static String directorySeparator = "/";
-	private final static String delimPipe = "|";
-	private final static String delimComma = ",";
-	private final static DateTimeFormatter dateTimeformat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-	private final static DateTimeFormatter dateTimeHL7format = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+	private static final String directorySeparator = "/";
+	private static final String delimPipe = "|";
+	private static final String delimComma = ",";
+	private static final DateTimeFormatter dateTimeformat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+	private static final DateTimeFormatter dateTimeHL7format = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
 	private static int siteidIdx = 0;				// index into columns in input hash files
 	private static int projectidIdx = 1;
@@ -101,10 +101,10 @@ public class GlobalMatchSqlite {
 	private static String tempMessage;
 	private final static boolean quickTest = true;
 	
-	private static Integer patGlobalIdCount = 0;
-	private static Map<Integer, Set<Integer>> patGlobalIdMap;	// holds patient matches
-	private static List<Integer> matchSequence;					// holds match rules to run
-	private static List<String> exclusionPats;					// holds pats with exclusion flag
+	private Integer patGlobalIdCount = 0;
+	private Map<Integer, Set<Integer>> patGlobalIdMap;	// holds patient matches
+	private List<String> exclusionPats;					// holds pats with exclusion flag
+	private static List<Integer> matchSequence;			// holds match rules to run
 
 	protected final static Map<Integer, String> matchRule = new HashMap<Integer, String>();
 	static {
@@ -122,7 +122,6 @@ public class GlobalMatchSqlite {
 		matchRule.put(11, "7 matchto 7");
 		matchRule.put(12, "8 matchto 8");
 	}
-	
 	// constructor
 	public GlobalMatchSqlite(String projectRoot, Integer idSeed) {
 		System.out.println("Project Root path passed to constructor: " + projectRoot);
@@ -143,25 +142,25 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static String changeDirectorySeparator(String filePath) {
+	private String changeDirectorySeparator(String filePath) {
 		return filePath.replaceAll("\\\\", directorySeparator);	// change dir separator if Windows
 	}
-	public static String timeNowFormatted() {
+	public String timeNowFormatted() {
 		LocalDateTime now = LocalDateTime.now();		//Get current date time
 		return now.format( dateTimeformat );
 	}
-	public static String dateNowFormatted() {
+	public String dateNowFormatted() {
 		LocalDate now = LocalDate.now();				//Get current date
 		return now.format(DateTimeFormatter.ISO_DATE);
 	}
-	public static String dateTimeNowHL7() {
+	public String dateTimeNowHL7() {
 		LocalDateTime now = LocalDateTime.now();		//Get current date time in HL7 format
 		return now.format( dateTimeHL7format );
 	}
 	/**
 	 * Connect to SQLite database
 	 */
-	public static void connectDb() {
+	public void connectDb() {
 		db = null;
 		try {
 			String url = "jdbc:sqlite:" + dbDirectory + dbName;		// create url to database
@@ -184,7 +183,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 	
-	public static void doAutoCommit(boolean autoCommitFlag) {
+	public void doAutoCommit(boolean autoCommitFlag) {
 		try {
 			db.setAutoCommit(autoCommitFlag);	// turn off AutoCommit to make storing faster
 		} catch (SQLException e1) {
@@ -192,7 +191,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	public static void processInputFiles(int step, String prefix, String suffix) {
+	public void processInputFiles(int step, String prefix, String suffix) {
 		exclusionPats = new ArrayList<String>();		// holds list of exclusion pats
 		String fullName = null;
 		tempMessage = "Step " + step + ": reading input files from: " + inputDir;
@@ -352,7 +351,7 @@ public class GlobalMatchSqlite {
 		indexGlobalMatchTable();		// go index GlobalMatch
 	}
 	
-	public static void saveExclusionPatients(List<String> exclusionPats) {
+	public void saveExclusionPatients(List<String> exclusionPats) {
 		tempMessage = "storing " + exclusionPats.size() + " exclusion patient(s)";
 		writeLog(logInfo, tempMessage, true);
 		
@@ -392,7 +391,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 	
-	public static void indexGlobalMatchTable() {
+	public void indexGlobalMatchTable() {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
@@ -429,7 +428,7 @@ public class GlobalMatchSqlite {
 		writeLog(logTask, tempMessage, true);
 	}
 	
-	public static void dropIndexGlobalMatchTable() {
+	public void dropIndexGlobalMatchTable() {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
@@ -464,7 +463,7 @@ public class GlobalMatchSqlite {
 		writeLog(logTask, tempMessage, true);
 	}
 
-	public static void resetGlobalMatchTable() {
+	public void resetGlobalMatchTable() {
 		tempMessage = "Clearing GlobalMatch Table";
 		writeLog(logTask, tempMessage, true);
 		int count = 0;
@@ -485,7 +484,7 @@ public class GlobalMatchSqlite {
 		transferInclusionPatients();	// go load GlobalMatch table from InclusionPatients
 	}
 
-	public static void transferInclusionPatients() {
+	public void transferInclusionPatients() {
 		tempMessage = "transferring Inclusion Patient(s) to GlobalMatch table";
 		writeLog(logInfo, tempMessage, true);
 		int recordsRead = 0;
@@ -548,7 +547,7 @@ public class GlobalMatchSqlite {
 	}
 
 	/*  Exclusion patients not transferred to avoid complications in matching
-	public static void transferExclusionPatients() {
+	public void transferExclusionPatients() {
 		int count = 0;
 		String sql1 = 		
 		"INSERT INTO GlobalMatch (globalId,siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion) "+
@@ -564,14 +563,14 @@ public class GlobalMatchSqlite {
 	*/
 
 	// step 2 run match rules as indicated
-	public static void runMatchRules(int step, List<Integer> ruleList) {
+	public void runMatchRules(int step, List<Integer> ruleList) {
 		tempMessage = "Step " + step + ": Run patient match rule sequence " + ruleList;
 		writeLog(logBegin, tempMessage, true);
 		Integer currGlobalId = globalId.get();		// get (but don't increment) current global Id
 		tempMessage = "Global Id starting seed: " + currGlobalId;
 		writeLog(logInfo, tempMessage, true);
 		
-		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(50000);	//declare again to clear previous list
+		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(100000);	//declare again to clear previous list
 		if (db == null) {
 			connectDb();				// connect to database if no connection yet
 		}
@@ -659,7 +658,7 @@ public class GlobalMatchSqlite {
 		//	try {db.close();} catch (SQLException e) { /* ignored */} }
 	}
 	
-	public static void resetGlobalIds() {
+	public void resetGlobalIds() {
 		tempMessage = "Resetting all GlobalMatch global ids to 0";
 		writeLog(logTask, tempMessage, true);
 		if (db == null) {
@@ -677,7 +676,7 @@ public class GlobalMatchSqlite {
 		writeLog(logTask, tempMessage, true);
 	}
 
-	public static void assignMatchedGlobalIds() {
+	public void assignMatchedGlobalIds() {
 		int matchingPatGroups = 0;
 		int assignedGlobalIds = 0;
 		tempMessage = "Assigning global ids to matching patients";
@@ -766,7 +765,7 @@ public class GlobalMatchSqlite {
 			Integer maxGlobalId = 0;
 			String sql1 = "SELECT globalId FROM GlobalMatch WHERE id IN (" + sb1.toString() + ")"; // create sql 
 			try ( PreparedStatement pstmt1 = db.prepareStatement(sql1)) {	// check if any already have global id
-				pstmt1.setFetchSize(500);				//number of rows to be fetched when needed
+				//pstmt1.setFetchSize(500);				//number of rows to be fetched when needed
 				ResultSet resultSet = pstmt1.executeQuery();
 				while (resultSet.next()) {				// get max global Id from this group
 					Integer currGlobalId = resultSet.getInt("globalId");
@@ -783,18 +782,17 @@ public class GlobalMatchSqlite {
 					resultSet.close();
 				}
 			} catch (SQLiteException e) {
-				System.out.println("sql1 = " + sql1);
 				System.out.println("SQLite error code: " + e.getErrorCode());
 				//if (e.getErrorCode() == SQLiteErrorCode.SQLITE_BUSY.code) { }
 				//if (e.getErrorCode() == SQLiteErrorCode.SQLITE_CONSTRAINT.code) { }
 				//if (code.equals(SQLiteErrorCode.SQLITE_NOTADB) || code.equals(SQLiteErrorCode.SQLITE_CORRUPT)) { }
 				stopProcess(e.getMessage());
 			} catch (SQLException e) {
-				System.out.println("sql1 = " + sql1);
 				System.out.println("SQL error code: " + e.getErrorCode());
 				System.out.println(e.getMessage());
 				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 			} catch (Exception e) {
+				System.out.println("**Exception while checking for max globalId");
 				stopProcess(e.getMessage());
 			}
 
@@ -809,16 +807,16 @@ public class GlobalMatchSqlite {
 					pstmt2.setInt(2, num);
 					pstmt2.executeUpdate();				// update this record 
 				} catch (SQLiteException e) {
-					System.out.println("sql2 = " + sql2);
 					System.out.println("SQLite error code: " + e.getErrorCode());
 					System.out.println(e.getMessage());
 					//if (e.getErrorCode() == SQLiteErrorCode.SQLITE_BUSY.code) { }
 					stopProcess(e.getMessage());
 				} catch (SQLException e) {
-					System.out.println("sql2 = " + sql2);
 					System.out.println(e.getMessage());
 					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 				} catch (Exception e) {
+					System.out.println("**Exception while assigning globalId to matching patients");
+					System.out.println(e.getMessage());
 					stopProcess(e.getMessage());
 				}
 			}
@@ -834,7 +832,7 @@ public class GlobalMatchSqlite {
 		writeLog(logInfo, tempMessage, true);
 	}
 
-	public static void assignUnMatchedGlobalIds() {
+	public void assignUnMatchedGlobalIds() {
 		int unAssignedGlobalIds = 0;
 		tempMessage = "Assigning global ids to unmatched patients";
 		writeLog(logTask, tempMessage, true);
@@ -889,7 +887,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 	
-	public static void assignPatientAliasGlobalIds() {
+	public void assignPatientAliasGlobalIds() {
 		Map<String, Integer> patAliasMap = new HashMap<String, Integer>(1000);
 		String lastPat = "xx";
 		int recordsRead = 0;
@@ -967,7 +965,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule0(boolean keySame) {
+	private void runGlobalMatchRule0(boolean keySame) {
 		tempMessage = "Starting Match Rule 1";
 		writeLog(logInfo, tempMessage, true);
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
@@ -1064,14 +1062,14 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void addToGlobalIdGroup(ArrayList<Integer> globalIdGroup) {
+	private void addToGlobalIdGroup(ArrayList<Integer> globalIdGroup) {
 		Set<Integer> setConsolidated = new HashSet<Integer>(globalIdGroup);		// convert to set to remove dups
 		patGlobalIdCount++;
 		patGlobalIdMap.put(patGlobalIdCount, setConsolidated);		// save to map of matched patients
 		//patGlobalIdMap.forEach((k, v) -> System.out.println((k + ":" + v)));	// print out - Java 8
 	}
 
-	private static void runGlobalMatchRule1(boolean keySame) {
+	private void runGlobalMatchRule1(boolean keySame) {
 		tempMessage = "Starting Match Rule 1";
 		writeLog(logInfo, tempMessage, true);
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
@@ -1158,7 +1156,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule2(boolean keySame) {
+	private void runGlobalMatchRule2(boolean keySame) {
 		tempMessage = "Starting Match Rule 2";
 		writeLog(logInfo, tempMessage, true);
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
@@ -1241,7 +1239,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule3(boolean keySame) {
+	private void runGlobalMatchRule3(boolean keySame) {
 		tempMessage = "Starting Match Rule 3";
 		writeLog(logInfo, tempMessage, true);
 		int recordsRead = 0;
@@ -1313,7 +1311,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule4(boolean keySame) {
+	private void runGlobalMatchRule4(boolean keySame) {
 		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
@@ -1364,7 +1362,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule5(boolean keySame) {
+	private void runGlobalMatchRule5(boolean keySame) {
 		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
@@ -1415,7 +1413,7 @@ public class GlobalMatchSqlite {
 		}	
 	}
 
-	private static void runGlobalMatchRule6(boolean keySame) {
+	private void runGlobalMatchRule6(boolean keySame) {
 		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
@@ -1466,7 +1464,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule7(boolean keySame) {
+	private void runGlobalMatchRule7(boolean keySame) {
 		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
@@ -1517,7 +1515,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule8(boolean keySame) {
+	private void runGlobalMatchRule8(boolean keySame) {
 		int recordsRead = 0;
 		int patientMatches = 0;
 		String lastPat = "xx";
@@ -1588,7 +1586,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule9(boolean keySame) {
+	private void runGlobalMatchRule9(boolean keySame) {
 		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
@@ -1639,7 +1637,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule10(boolean keySame) {
+	private void runGlobalMatchRule10(boolean keySame) {
 		int patientMatches = 0;
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
@@ -1690,7 +1688,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule11(boolean keySame) {
+	private void runGlobalMatchRule11(boolean keySame) {
 		int recordsRead = 0;
 		int patientMatches = 0;
 		String lastPat = "xx";
@@ -1761,7 +1759,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static void runGlobalMatchRule12(boolean keySame) {
+	private void runGlobalMatchRule12(boolean keySame) {
 		int recordsRead = 0;
 		int patientMatches = 0;
 		String lastPat = "xx";
@@ -1832,7 +1830,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	public static void writeInvalidData( String fileOut, String invalidData) {
+	public void writeInvalidData( String fileOut, String invalidData) {
 		if (invalidData == null || invalidData.isEmpty()) {		// check if anything in invalidData
 			return;
 		}
@@ -1854,7 +1852,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	public static void writeLog(int logLevel, String textMessage, boolean echoConsole) {
+	public void writeLog(int logLevel, String textMessage, boolean echoConsole) {
 		String firstPart;
 		switch (logLevel) {
 		case 0 :
@@ -1900,7 +1898,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	private static String makeFilePath(String filePath, String fileName) {
+	private String makeFilePath(String filePath, String fileName) {
 		filePath = changeDirectorySeparator(filePath);
 		if (filePath.endsWith(directorySeparator)) {
 			return filePath + fileName;
@@ -1909,19 +1907,19 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	public static String changeFileExtension(String fileToRename, String newExtension) {
+	public String changeFileExtension(String fileToRename, String newExtension) {
 		int index = fileToRename.lastIndexOf('.');
 		String name = fileToRename.substring(0, index + 1);
 		return name + newExtension;
 	}
 
-	private static String getFileExtension(String fullFilePath) {
+	private String getFileExtension(String fullFilePath) {
 		String fullName = changeDirectorySeparator(fullFilePath);	// check if Windows separator
 		String fileName = fullName.substring(fullName.lastIndexOf("/")+1);
 		return fileName;
 	}
 
-	public static boolean moveFileToDir(String processedFilesDirectory, String fileToMoveName) throws IOException {
+	public boolean moveFileToDir(String processedFilesDirectory, String fileToMoveName) throws IOException {
 		boolean success = false;
 		String tempMessage = null;
 		String fileToMoveNameOnly = null;
@@ -1957,7 +1955,7 @@ public class GlobalMatchSqlite {
 	}
 
 
-	private static void readConfig(String projRoot) {
+	private void readConfig(String projRoot) {
 		
 		configFilePath = makeFilePath(makeFilePath(projRoot, "config"), configFileName);  	// get config path
 		atomicIntegerPath = makeFilePath(makeFilePath(projRoot, "config"), atomicIntegerFile);  // get path
@@ -2008,7 +2006,7 @@ public class GlobalMatchSqlite {
 	}
 
 	// read files from 1 input directory
-	public static ArrayList<String> getFileNames1Dir(String directory, final String prefix, final String suffix) {
+	public ArrayList<String> getFileNames1Dir(String directory, final String prefix, final String suffix) {
 
 		ArrayList<String> matchingFiles = new ArrayList<String>();
 		File dir = new File(directory);
@@ -2034,7 +2032,7 @@ public class GlobalMatchSqlite {
 		return matchingFiles;
 	}
 
-	public static void readAtomicIntegerSeed() {
+	public void readAtomicIntegerSeed() {
 		File fileIn = new File(atomicIntegerPath);
 		try ( BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(fileIn))) ) {
 			String line = null;
@@ -2052,7 +2050,7 @@ public class GlobalMatchSqlite {
 		}
 	}
 
-	public static void writeAtomicIntegerSeed() {
+	public void writeAtomicIntegerSeed() {
 
 		File fileOut = new File(atomicIntegerPath);
 		try (BufferedWriter bw = new BufferedWriter(new FileWriter(fileOut)) ) {
@@ -2069,7 +2067,7 @@ public class GlobalMatchSqlite {
 	}
 
 	// generate report
-	public static void createReport1(String site) {
+	public void createReport1(String site) {
 		String sql0;
 		String sql1;
 		ArrayList<String> exclusionPats = new ArrayList<String>();
@@ -2145,7 +2143,7 @@ public class GlobalMatchSqlite {
 	}
 
 	// store to Temp table with integer primary key
-	public static void storeToTempTableIdKey(Integer rowId, Integer gblId) {
+	public void storeToTempTableIdKey(Integer rowId, Integer gblId) {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
@@ -2163,7 +2161,7 @@ public class GlobalMatchSqlite {
 	}
 
 	// create temp table with integer primary key
-	public static void createTempTableIdKey() {
+	public void createTempTableIdKey() {
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
@@ -2205,7 +2203,7 @@ public class GlobalMatchSqlite {
 	}
 
 	// create temp table with all columns indexed
-	public static void createTempTableAllKey() {
+	public void createTempTableAllKey() {
 		if (tempTableAllKeyCreated) {	// if already created just return
 			return;
 		}
@@ -2308,7 +2306,7 @@ public class GlobalMatchSqlite {
 		 */
 	}
 
-	public static void stopProcess(String errorMessage) {
+	public void stopProcess(String errorMessage) {
 		writeLog(logInfo, "** Exception encountered during processing", true);
 		writeLog(logInfo, errorMessage, true);
 		writeLog(logInfo, "Please make sure DB Browser is not running", true);
@@ -2368,14 +2366,15 @@ public class GlobalMatchSqlite {
 			System.out.println("Valid params: Project Root,  Step number: 1=process input files and 2=run match rules.");
 			return;
 		}
-
+		
 		//configRootPath = System.getenv("GLOBAL_MATCH_BASE");		// read root dir from System environment variable
-		configRootPath = changeDirectorySeparator(configRootPath);	// change file separator if Windows
+		configRootPath = configRootPath.replaceAll("\\\\", directorySeparator);	// change dir separator if Windows
 		if (configRootPath.endsWith(directorySeparator)) {
 			configRootPath = configRootPath.substring(0, configRootPath.length() - 1 ); // remove last / 
 		}
 		System.out.println("GLOBAL_MATCH_BASE directory: " + configRootPath);
-		readConfig(configRootPath);			// read configuration properties file from config subdirectory
+		GlobalMatchSqlite gms = new GlobalMatchSqlite(configRootPath, tempAtomicIntegerSeed);	//create instance
+		gms.readConfig(configRootPath);			// read configuration properties file from config subdirectory
 		
 		if (!tempMatchRules.isEmpty()) {	// if match rules passed in
 			matchSequence.clear();			// clear those read from properties file
@@ -2391,16 +2390,16 @@ public class GlobalMatchSqlite {
 		}
 
 		if (processStep == 1) {
-			processInputFiles(processStep, tempFileNamePrefix, tempFileNameSuffix);	// go process input files in input dir
+			gms.processInputFiles(processStep, tempFileNamePrefix, tempFileNameSuffix);	// go process input files in input dir
 		} else if (processStep == 2) {
-			runMatchRules(processStep, matchSequence);	// go run match rules
+			gms.runMatchRules(processStep, matchSequence);	// go run match rules
 		} else if (processStep == 3) {
-			createReport1(targetSite);					// go create report
+			gms.createReport1(targetSite);					// go create report
 		} else {
 			System.out.println("Unable to determine which step to process");
 		}
 
-		writeAtomicIntegerSeed();		// go save current value of next globalId
+		gms.writeAtomicIntegerSeed();		// go save current value of next globalId
 		if (db != null) {
 			try {
 				db.close();				// close database					

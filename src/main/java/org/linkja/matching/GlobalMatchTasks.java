@@ -1,15 +1,9 @@
 package org.linkja.matching;
 
 import java.io.File;
-//import java.io.FileInputStream;
-//import java.io.IOException;
-//import java.io.InputStream;
-//import java.net.URISyntaxException;
-//import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-//import java.util.Properties;
 import java.util.stream.Collectors;
 
 import javafx.application.Application;
@@ -63,13 +57,6 @@ public class GlobalMatchTasks extends Application {
 	private static String configRootPath;
 	private static String inputFileNamePrefix;
 	private static String inputFileNameSuffix;
-	//private static String inputDir;
-	//private static String outputDir;
-	//private static String processedDir;
-	//private static String dbDirectory;
-	//private static String dbName;
-	//private static final String PROJECT_ROOT = "%ProjectRoot%";
-	//private static final String configFileName = "global-match.properties";
 
 	private static final DirectoryChooser directoryChooser = new DirectoryChooser();
 	private static final String directorySeparator = "/";
@@ -94,11 +81,6 @@ public class GlobalMatchTasks extends Application {
 			System.exit(-1);
 		}
 
-		/*
-		try {
-			configRootPath = getJarPath();
-		} catch (IOException | URISyntaxException e) { e.printStackTrace(); }
-		*/
 		configRootPath = changeDirectorySeparator(configRootPath);		// change file separator if Windows
 		if (configRootPath.endsWith(directorySeparator)) {
 			configRootPath = configRootPath.substring(0, configRootPath.length() - 1 ); // remove last / 
@@ -202,8 +184,6 @@ public class GlobalMatchTasks extends Application {
 			if (targetDir.isEmpty() || (!targetDir.contains(directorySeparator) && !targetDir.contains("\\"))) {
 				exception.setText("Project root must contain directory separator\nExample:  C:/GlobalMatch");
 			} else {
-				//https://code.makery.ch/blog/javafx-dialogs-official/
-				//https://stackoverflow.com/questions/31556373/javafx-dialog-with-2-input-fields
 				// start of popup dialog for input file filters
 				Dialog<Pair<String, String>> dialog = new Dialog<>();  // Create the custom dialog.
 				dialog.setTitle("Select input file filters");
@@ -367,7 +347,6 @@ public class GlobalMatchTasks extends Application {
 		helpButton.setMinWidth(buttonBox.getPrefWidth());
 		helpButton.setStyle("-fx-font-weight: bold;");
 		helpButton.setOnAction( (event) -> {
-			// show popup help https://code.makery.ch/blog/javafx-dialogs-official/
 			Alert alert = new Alert(AlertType.INFORMATION);
 			alert.setTitle("Global Matching Rules");
 			alert.setHeaderText("Matching Rule Comparisons");
@@ -441,56 +420,4 @@ public class GlobalMatchTasks extends Application {
 		return filePath.replaceAll("\\\\", directorySeparator);	// change dir separator if Windows
 	}
 
-	
-	/*
-	private static void readConfig(String projRoot) {
-		
-		String configFilePath = makeFilePath(makeFilePath(projRoot, "config"), configFileName);  	// get config path
-
-		// read config data from properties file using try with resources, means autoclose
-		Properties prop = new Properties();
-		try ( InputStream input = new FileInputStream( configFilePath )) {
-			prop.load( input );
-			//configFileDir = prop.getProperty("ConfigFilesDirectory");
-			//inputDir = prop.getProperty("InputFilesDirectory");
-			//inputDir = changeDirectorySeparator(inputDir);				// change file separator if Windows
-			//inputDir = inputDir.replaceFirst(PROJECT_ROOT, projRoot);
-			//outputDir = prop.getProperty("OutputFilesDirectory");
-			//outputDir = changeDirectorySeparator(outputDir);			// change file separator if Windows
-			//outputDir = outputDir.replaceFirst(PROJECT_ROOT, projRoot);
-			//processedDir = prop.getProperty("ProcessedFilesDirectory");
-			//processedDir = changeDirectorySeparator(processedDir);		// change file separator if Windows
-			//processedDir = processedDir.replaceFirst(PROJECT_ROOT, projRoot);
-			//dbDirectory = prop.getProperty("DbDirectory");
-			//dbDirectory = dbDirectory.replaceFirst(PROJECT_ROOT, projRoot);
-			//dbName = prop.getProperty("DbName");
-			inputFileNamePrefix = prop.getProperty("InputFileNamePrefix");
-			inputFileNameSuffix = prop.getProperty("InputFileNameSuffix");
-		} catch (Exception e) {
-			//e.printStackTrace();
-			System.out.println("**read config error message: "+e.getMessage());
-			System.exit(1);
-		}
-	}
-	*/
-	
-	/*
-	private static String makeFilePath(String filePath, String fileName) {
-		filePath = changeDirectorySeparator(filePath);
-		if (filePath.endsWith(directorySeparator)) {
-			return filePath + fileName;
-		} else {
-			return filePath + directorySeparator + fileName;
-		}
-	}
-	*/
-
-	/*
-	private static String getJarPath() throws IOException, URISyntaxException {
-		File f = new File(GlobalMatchTasks.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-		String jarPath = f.getCanonicalPath().toString();
-		String jarDir = jarPath.substring( 0, jarPath.lastIndexOf( File.separator ));
-		return jarDir;
-	}
-	*/
 }
