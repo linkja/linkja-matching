@@ -169,8 +169,9 @@ public class GlobalMatchSqlite {
 			System.out.println("Connection to SQLite has been established.");
 			
 			SQLiteConfig config = new SQLiteConfig();
-			config.setCacheSize(10000);					// set some helpful config values
-			config.setPageSize(8192);
+			config.setCacheSize(12000);					// set some helpful config values
+			//config.setPageSize(8192);
+			config.setPageSize(16384);
 			config.setJournalMode(SQLiteConfig.JournalMode.OFF);
 			config.setSynchronous(SQLiteConfig.SynchronousMode.OFF);
 			config.setLockingMode(SQLiteConfig.LockingMode.EXCLUSIVE);
@@ -569,11 +570,11 @@ public class GlobalMatchSqlite {
 		Integer currGlobalId = globalId.get();		// get (but don't increment) current global Id
 		tempMessage = "Global Id starting seed: " + currGlobalId;
 		writeLog(logInfo, tempMessage, true);
-		
-		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(100000);	//declare again to clear previous list
 		if (db == null) {
 			connectDb();				// connect to database if no connection yet
 		}
+		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(500000);	//declare again to clear previous list
+
 		resetGlobalIds();				// go reset globalIds in GlobalMatch to 0
 		assignPatientAliasGlobalIds();	// assign Global Ids to derived patients (aliases) first
 		
@@ -677,16 +678,17 @@ public class GlobalMatchSqlite {
 	}
 
 	public void assignMatchedGlobalIds() {
-		int matchingPatGroups = 0;
 		int assignedGlobalIds = 0;
+		int patGlobalIdMapCount = 0;
 		tempMessage = "Assigning global ids to matching patients";
 		writeLog(logTask, tempMessage, true);
 		if (db == null) {
 			connectDb();		// connect to database if no connection yet
 		}
-		if (patGlobalIdMap.size() == 0) {	// check if any matched patients
-			tempMessage = "Found " + patGlobalIdMap.size() + " matching patient groups";
-			writeLog(logInfo, tempMessage, true);
+		patGlobalIdMapCount = patGlobalIdMap.size();	// get size of matched pat groups
+		tempMessage = "Found " + patGlobalIdMapCount + " matching patient groups";
+		writeLog(logInfo, tempMessage, true);
+		if (patGlobalIdMapCount == 0) {		// quit now if no matched patients
 			return;
 		}
 		// consolidate matching patients from patGlobalIdMap into lists where each pat included in only 1 group
@@ -696,7 +698,7 @@ public class GlobalMatchSqlite {
 		Set<Integer> patSet1 = patGlobalIdMap.values().stream().findFirst().get();	//get pat set of first entry
 		patIdArray.add(patSet1);		// add first patients to consolidated list
 
-		int patGlobalIdMapCount = 0;
+		patGlobalIdMapCount = 0;
 		for (Map.Entry<Integer, Set<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each entry in map
 			patGlobalIdMapCount++;
 			if (patGlobalIdMapCount % 50000 == 0) {
@@ -708,7 +710,7 @@ public class GlobalMatchSqlite {
 			
 			boolean entryFound = false;
 			for (int w = 0; w < patIdArray.size(); w++ ) {	// look thru consolidated groups, see if pats exist
-				Set<Integer> patSetConsol = patIdArray.get( w ); 		// get set previously consolidated group
+				Set<Integer> patSetConsol = patIdArray.get( w ); 	// get set of previously consolidated group
 
 				for (Integer element : patSet) {			// loop thru consolidated pats to see if found
 					if (patSetConsol.contains( element )) {	// if this pat already in consolidated set
@@ -729,29 +731,21 @@ public class GlobalMatchSqlite {
 		//*** end of pat list consolidation
 		tempMessage = "consolidated matching patient groups to " + patIdArray.size();
 		writeLog(logInfo, tempMessage, true);
+		
+		patGlobalIdMap.clear(); 	// clear hashmap to save memory
 
-		doAutoCommit(false);		// turn off AutoCommit to make storing faster
+		doAutoCommit(false);			// turn off AutoCommit to make storing faster
+		final int batchSize = 1000;		// number of updates before commits
+		int commitCount = 0;
+		
 		// loop thru each consolidated set, find any existing global ids, give same global id to all in set
 		for (int x = 0; x < patIdArray.size(); x++ ) {
-
-			Set<Integer> patSet = patIdArray.get( x );
-			matchingPatGroups++;							// increment count of matching groups
-
-			if ( x % 10000 == 0) {
-				if (x > 0) {
-					tempMessage = "updating globalId for matching patient group " + x;
-					writeLog(logInfo, tempMessage, true);
-					try { db.commit();
-					} catch (SQLException e) {
-						e.printStackTrace();
-						if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
-					} catch (Exception e) {
-						System.out.println("**Exception doing commit");
-						System.out.println(e.getMessage());
-						stopProcess(e.getMessage());
-					}
-				}
+			if ( x % 25000 == 0) {
+				tempMessage = "updating globalId for matching patient group " + x;
+				writeLog(logInfo, tempMessage, true);
 			}
+
+			Set<Integer> patSet = patIdArray.get( x );	// get next set of matched patients
 			int patCount = 0;
 			StringBuilder sb1 = new StringBuilder();	// build string with all ids of set
 			for (Integer num : patSet) {
@@ -781,14 +775,13 @@ public class GlobalMatchSqlite {
 				if (resultSet != null) {
 					resultSet.close();
 				}
-			} catch (SQLiteException e) {
-				System.out.println("SQLite error code: " + e.getErrorCode());
+			//} catch (SQLiteException e) {
+				//System.out.println("SQLite error code: " + e.getErrorCode());
 				//if (e.getErrorCode() == SQLiteErrorCode.SQLITE_BUSY.code) { }
 				//if (e.getErrorCode() == SQLiteErrorCode.SQLITE_CONSTRAINT.code) { }
 				//if (code.equals(SQLiteErrorCode.SQLITE_NOTADB) || code.equals(SQLiteErrorCode.SQLITE_CORRUPT)) { }
-				stopProcess(e.getMessage());
+				//stopProcess(e.getMessage());
 			} catch (SQLException e) {
-				System.out.println("SQL error code: " + e.getErrorCode());
 				System.out.println(e.getMessage());
 				if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
 			} catch (Exception e) {
@@ -806,11 +799,16 @@ public class GlobalMatchSqlite {
 					pstmt2.setInt(1, maxGlobalId);		// set corresponding params
 					pstmt2.setInt(2, num);
 					pstmt2.executeUpdate();				// update this record 
-				} catch (SQLiteException e) {
-					System.out.println("SQLite error code: " + e.getErrorCode());
-					System.out.println(e.getMessage());
+					
+					commitCount++;
+					if (commitCount % batchSize == 0) {
+						db.commit();	// if at batchSize then do commit since autocommit is off
+					}
+				//} catch (SQLiteException e) {
+					//System.out.println("SQLite error code: " + e.getErrorCode());
+					//System.out.println(e.getMessage());
 					//if (e.getErrorCode() == SQLiteErrorCode.SQLITE_BUSY.code) { }
-					stopProcess(e.getMessage());
+					//stopProcess(e.getMessage());
 				} catch (SQLException e) {
 					System.out.println(e.getMessage());
 					if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
@@ -966,7 +964,7 @@ public class GlobalMatchSqlite {
 	}
 
 	private void runGlobalMatchRule0(boolean keySame) {
-		tempMessage = "Starting Match Rule 1";
+		tempMessage = "Starting Match Rule 0";
 		writeLog(logInfo, tempMessage, true);
 		ArrayList<Integer> currGlobalIdGroup = new ArrayList<Integer>();
 		if (db == null) {
