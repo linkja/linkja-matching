@@ -99,7 +99,6 @@ public class GlobalMatchSqlite {
 	private static final String nullEntry = "NULL";
 	private static boolean tempTableAllKeyCreated = false;
 	private static String tempMessage;
-	private final static boolean quickTest = true;
 	
 	private Integer patGlobalIdCount = 0;
 	private Map<Integer, Set<Integer>> patGlobalIdMap;	// holds patient matches
@@ -303,11 +302,6 @@ public class GlobalMatchSqlite {
 						commitCount++;
 						if (commitCount % batchSize == 0) {
 							db.commit();	// if at batchSize then do commit since autocommit is off
-						}
-						if (quickTest) {
-							if (commitCount > 100000) {
-								break;
-							}
 						}
 					} catch (SQLException e) {
 						System.out.println(e.getMessage());
@@ -577,7 +571,7 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();				// connect to database if no connection yet
 		}
-		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(500000);	//declare again to clear previous list
+		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(750000);	//declare again to clear previous list
 
 		resetGlobalIds();				// go reset globalIds in GlobalMatch to 0
 		assignPatientAliasGlobalIds();	// assign Global Ids to derived patients (aliases) first
@@ -696,7 +690,7 @@ public class GlobalMatchSqlite {
 			return;
 		}
 		// consolidate matching patients from patGlobalIdMap into lists where each pat included in only 1 group
-		ArrayList<Set<Integer>> patIdArray = new ArrayList<Set<Integer>>(100000);	// holds match groups of unique pats
+		ArrayList<Set<Integer>> patIdArray = new ArrayList<Set<Integer>>(200000);	// holds match groups of unique pats
 		
 		//Integer key1 = patGlobalIdMap.keySet().stream().findFirst().get();		//key of the first entry
 		Set<Integer> patSet1 = patGlobalIdMap.values().stream().findFirst().get();	//get pat set of first entry
@@ -737,7 +731,7 @@ public class GlobalMatchSqlite {
 		writeLog(logInfo, tempMessage, true);
 		
 		patGlobalIdMap.clear(); 		// clear hashmap to save memory
-		ArrayList<GlobalIdGroup> globalIdArray = new ArrayList<GlobalIdGroup>(100000);
+		ArrayList<GlobalIdGroup> globalIdArray = new ArrayList<GlobalIdGroup>(200000); //holds matching pats and globalID
 		StringBuilder sb1 = new StringBuilder();	// holds string with all pat ids of set
 		
 		// loop thru each consolidated set, find any existing global ids, give same global id to all in set
@@ -801,6 +795,8 @@ public class GlobalMatchSqlite {
 			currGroup.groupSet = patSet;
 			globalIdArray.add(currGroup);
 		}
+		
+		// have matching patient groups with group globalId so update each pat with assigned globalId
 		patIdArray.clear();				// clear array to save memory
 		doAutoCommit(false);			// turn off AutoCommit to make storing faster
 		final int batchSize = 1000;		// number of updates before commits
@@ -2316,20 +2312,6 @@ public class GlobalMatchSqlite {
 		tempTableAllKeyCreated = true;
 		tempMessage = "created indexes on Temporary table " + TempTableAllKey;
 		writeLog(logInfo, tempMessage, true);
-
-		/*
-		System.out.println("-----------------------");
-		try ( PreparedStatement pstmt9 = db.prepareStatement("SELECT * FROM " + TempTableAllKey + " LIMIT 20")) {
-			ResultSet rset9 = pstmt9.executeQuery();
-			while (rset9.next()) {
-				System.out.println("temp: " +" rowId: "+rset9.getInt("rowId")+"  "+ rset9.getString("hash1") );
-			}
-			if (rset9 != null) { rset9.close(); }
-		} catch (SQLException e) {
-			System.out.println(e.getMessage());
-			if (e.getMessage().contains(SQL_Exception1)) { stopProcess(e.getMessage()); }
-		}
-		 */
 	}
 
 	public void stopProcess(String errorMessage) {
@@ -2384,9 +2366,6 @@ public class GlobalMatchSqlite {
 			System.out.println("Valid params: Project Root,  Step number: 1=process input files and 2=run match rules.");
 			System.exit(-1);
 		}
-
-		//processStep = 1;	//****** testing
-		//processStep = 2;
 
 		if (processStep <= 0 || processStep > 3) {
 			System.out.println("Valid params: Project Root,  Step number: 1=process input files and 2=run match rules.");
