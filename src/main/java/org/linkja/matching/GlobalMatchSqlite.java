@@ -102,6 +102,7 @@ public class GlobalMatchSqlite {
 	
 	private Integer patGlobalIdCount = 0;
 	private Map<Integer, Set<Integer>> patGlobalIdMap;	// holds patient matches
+	private Map<Integer, Integer> patGlobalIdMapLink;	// holds link to patient matches
 	private List<String> exclusionPats;					// holds pats with exclusion flag
 	private static List<Integer> matchSequence;			// holds match rules to run
 
@@ -571,7 +572,9 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();				// connect to database if no connection yet
 		}
-		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(750000);	//declare again to clear previous list
+		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(300000);	//declare again to clear previous list
+		patGlobalIdMapLink = new HashMap<Integer, Integer>(200000);		//declare again to clear previous list
+		
 
 		resetGlobalIds();				// go reset globalIds in GlobalMatch to 0
 		assignPatientAliasGlobalIds();	// assign Global Ids to derived patients (aliases) first
@@ -690,7 +693,7 @@ public class GlobalMatchSqlite {
 			return;
 		}
 		// consolidate matching patients from patGlobalIdMap into lists where each pat included in only 1 group
-		ArrayList<Set<Integer>> patIdArray = new ArrayList<Set<Integer>>(200000);	// holds match groups of unique pats
+		ArrayList<Set<Integer>> patIdArray = new ArrayList<Set<Integer>>(250000);	// holds match groups of unique pats
 		
 		//Integer key1 = patGlobalIdMap.keySet().stream().findFirst().get();		//key of the first entry
 		Set<Integer> patSet1 = patGlobalIdMap.values().stream().findFirst().get();	//get pat set of first entry
@@ -731,7 +734,8 @@ public class GlobalMatchSqlite {
 		writeLog(logInfo, tempMessage, true);
 		
 		patGlobalIdMap.clear(); 		// clear hashmap to save memory
-		ArrayList<GlobalIdGroup> globalIdArray = new ArrayList<GlobalIdGroup>(200000); //holds matching pats and globalID
+		patGlobalIdMapLink.clear();		// clear to save memory
+		ArrayList<GlobalIdGroup> globalIdArray = new ArrayList<GlobalIdGroup>(250000); //holds matching pats and globalID
 		StringBuilder sb1 = new StringBuilder();	// holds string with all pat ids of set
 		
 		// loop thru each consolidated set, find any existing global ids, give same global id to all in set
@@ -1079,10 +1083,33 @@ public class GlobalMatchSqlite {
 	}
 
 	private void addToGlobalIdGroup(ArrayList<Integer> globalIdGroup) {
-		Set<Integer> setConsolidated = new HashSet<Integer>(globalIdGroup);		// convert to set to remove dups
-		patGlobalIdCount++;
-		patGlobalIdMap.put(patGlobalIdCount, setConsolidated);		// save to map of matched patients
-		//patGlobalIdMap.forEach((k, v) -> System.out.println((k + ":" + v)));	// print out - Java 8
+		Set<Integer> nextPatSet = new HashSet<Integer>(globalIdGroup);		// convert to set to remove dups
+		
+		boolean entryNotFound = true;
+		for (Integer nextPat : nextPatSet) {
+			if (patGlobalIdMapLink.containsKey(nextPat)) {				// see if previous link for this pat
+				Integer linkId = patGlobalIdMapLink.get(nextPat);		// if so get link to patGlobalIdMap
+				Set<Integer> updatePatSet = patGlobalIdMap.get(linkId); // get existing pat set map entry
+				updatePatSet.addAll(nextPatSet);			// add all pats in incoming set, removes duplicates
+				patGlobalIdMap.put(linkId, updatePatSet);	// save updated set back into same map location
+				savePatGlobalIdMapLink(linkId, nextPatSet);	// save map link for all pats in incoming set
+				entryNotFound = false;
+				break;										// exit loop since entry found
+			}
+		}
+		
+		if (entryNotFound) {										// if no previous entry found
+			patGlobalIdCount++;
+			patGlobalIdMap.put(patGlobalIdCount, nextPatSet);		// put new entry of matched patients in map
+			savePatGlobalIdMapLink(patGlobalIdCount, nextPatSet);	// save map link for all pats in set
+		}
+	}
+
+	// save link to patGlobalIdMap entry for all pats in set
+	private void savePatGlobalIdMapLink(Integer tempLinkId, Set<Integer> tempPatSet) {
+		for (Integer tempPatId : tempPatSet) {				// for all patients in set
+			patGlobalIdMapLink.put(tempPatId, tempLinkId);	// adds if new or updates if existed previously
+		}
 	}
 
 	private void runGlobalMatchRule1(boolean keySame) {
