@@ -572,8 +572,8 @@ public class GlobalMatchSqlite {
 		if (db == null) {
 			connectDb();				// connect to database if no connection yet
 		}
-		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(300000);	//declare again to clear previous list
-		patGlobalIdMapLink = new HashMap<Integer, Integer>(200000);		//declare again to clear previous list
+		patGlobalIdMap = new HashMap<Integer, Set<Integer>>(750000, 0.90f);	//declare initial capacity and load factor
+		patGlobalIdMapLink = new HashMap<Integer, Integer>(750000, 0.90f);	//declare initial capacity and load factor
 		
 
 		resetGlobalIds();				// go reset globalIds in GlobalMatch to 0
@@ -692,50 +692,22 @@ public class GlobalMatchSqlite {
 		if (patGlobalIdMapCount == 0) {		// quit now if no matched patients
 			return;
 		}
-		// consolidate matching patients from patGlobalIdMap into lists where each pat included in only 1 group
-		ArrayList<Set<Integer>> patIdArray = new ArrayList<Set<Integer>>(250000);	// holds match groups of unique pats
-		
-		//Integer key1 = patGlobalIdMap.keySet().stream().findFirst().get();		//key of the first entry
-		Set<Integer> patSet1 = patGlobalIdMap.values().stream().findFirst().get();	//get pat set of first entry
-		patIdArray.add(patSet1);		// add first patients to consolidated list
+		// consolidate matching patients from patGlobalIdMap
+		ArrayList<Set<Integer>> patIdArray = new ArrayList<Set<Integer>>(750000);	// holds match groups of unique pats
 
 		patGlobalIdMapCount = 0;
 		for (Map.Entry<Integer, Set<Integer>> entry : patGlobalIdMap.entrySet()) { // loop thru each entry in map
 			patGlobalIdMapCount++;
-			if (patGlobalIdMapCount % 50000 == 0) {
-				tempMessage = "consolidating matching group "+patGlobalIdMapCount+ " array size: " +patIdArray.size();
-				writeLog(logInfo, tempMessage, true);
-			}
 			//Integer key1 = entry.getKey();
-			Set<Integer> patSet = entry.getValue();				// get matching pats in this group
-			
-			boolean entryFound = false;
-			for (int w = 0; w < patIdArray.size(); w++ ) {	// look thru consolidated groups, see if pats exist
-				Set<Integer> patSetConsol = patIdArray.get( w ); 	// get set of previously consolidated group
-
-				for (Integer element : patSet) {			// loop thru consolidated pats to see if found
-					if (patSetConsol.contains( element )) {	// if this pat already in consolidated set
-						patSetConsol.addAll( patSet );		// add this set to group, duplicates are eliminated
-						patIdArray.set(w, patSetConsol);	// put back in consolidated array, overwriting previous
-						entryFound = true;
-						break;								// found entry so exit loop
-					}
-				}
-				if (entryFound) {
-					break;									// exit entire loop if found entry
-				}
-			}
-			if (!entryFound) {
-				patIdArray.add(patSet);			// if no entry found, add new entry in consolidated array
-			}
+			Set<Integer> patSet = entry.getValue();	// get matching pats in this group
+			patIdArray.add(patSet);					// add new entry in consolidated array
 		}
-		//*** end of pat list consolidation
 		tempMessage = "consolidated matching patient groups to " + patIdArray.size();
 		writeLog(logInfo, tempMessage, true);
 		
 		patGlobalIdMap.clear(); 		// clear hashmap to save memory
 		patGlobalIdMapLink.clear();		// clear to save memory
-		ArrayList<GlobalIdGroup> globalIdArray = new ArrayList<GlobalIdGroup>(250000); //holds matching pats and globalID
+		ArrayList<GlobalIdGroup> globalIdArray = new ArrayList<GlobalIdGroup>(750000); //holds matching pats and globalID
 		StringBuilder sb1 = new StringBuilder();	// holds string with all pat ids of set
 		
 		// loop thru each consolidated set, find any existing global ids, give same global id to all in set
