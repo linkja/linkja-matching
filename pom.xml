@@ -59,6 +59,13 @@
             <version>2.5</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/org.apache.commons/commons-csv -->
+        <dependency>
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-csv</artifactId>
+          <version>1.8</version>
+        </dependency>
+
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
@@ -87,6 +94,17 @@
             <artifactId>javafx-graphics </artifactId>
             <version>${javafx.version}</version>
             <classifier>mac</classifier>
+        </dependency>
+
+        <dependency>
+            <groupId>org.linkja</groupId>
+            <artifactId>linkja-core</artifactId>
+            <version>1.0.7</version>
+        </dependency>
+        <dependency>
+            <groupId>org.linkja</groupId>
+            <artifactId>linkja-crypto</artifactId>
+            <version>0.4.1</version>
         </dependency>
 
     </dependencies>
