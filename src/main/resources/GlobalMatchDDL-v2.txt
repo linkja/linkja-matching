@@ -1,0 +1,74 @@
+
+CREATE TABLE IF NOT EXISTS InclusionPatients (
+		id integer PRIMARY KEY,
+		globalId integer,
+		siteId text,
+		projectId text,
+		pidhash text NOT NULL,
+		hash1 text,
+		hash2 text,
+		hash3 text,
+		hash4 text,
+		hash5 text,
+		hash6 text,
+		hash7 text,
+		hash8 text,
+		hash9 text,
+		hash10 text
+);
+
+CREATE TABLE IF NOT EXISTS ExclusionPatients (
+		id integer PRIMARY KEY,
+		globalId integer,
+		siteId text,
+		projectId text,
+		pidhash text NOT NULL,
+		hash1 text,
+		hash2 text,
+		hash3 text,
+		hash4 text,
+		hash5 text,
+		hash6 text,
+		hash7 text,
+		hash8 text,
+		hash9 text,
+		hash10 text
+);
+
+CREATE TABLE IF NOT EXISTS GlobalMatch (
+		id integer PRIMARY KEY,
+		globalId integer,
+		siteId text,
+		projectId text,
+		pidhash text NOT NULL,
+		hash1 text,
+		hash2 text,
+		hash3 text,
+		hash4 text,
+		hash5 text,
+		hash6 text,
+		hash7 text,
+		hash8 text,
+		hash9 text,
+		hash10 text
+);
+
+CREATE INDEX match0 ON GlobalMatch (hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,id);
+CREATE INDEX match1 ON GlobalMatch (hash1,hash2,hash5,hash9,hash10,id);
+CREATE INDEX match2 ON GlobalMatch (hash3,hash4,hash6,id);
+CREATE INDEX match3 ON GlobalMatch (hash1,id);
+CREATE INDEX match4 ON GlobalMatch (hash1,hash2,id);
+CREATE INDEX match5 ON GlobalMatch (hash1,hash5,id);
+CREATE INDEX match6 ON GlobalMatch (hash1,hash9,id);
+CREATE INDEX match7 ON GlobalMatch (hash1,hash10,id);
+CREATE INDEX match8 ON GlobalMatch (hash3,id);
+CREATE INDEX match9 ON GlobalMatch (hash3,hash4,id);
+CREATE INDEX match10 ON GlobalMatch (hash3,hash6,id);
+CREATE INDEX match11 ON GlobalMatch (hash7,id);
+CREATE INDEX match12 ON GlobalMatch (hash8,id);
+CREATE INDEX pidindex ON GlobalMatch (pidhash,siteId,projectId,id);
+COMMIT;
+
+CREATE VIEW report1 AS 
+SELECT siteId, projectId, pidhash, globalId FROM GlobalMatch;
+
