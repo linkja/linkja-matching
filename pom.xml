@@ -6,7 +6,7 @@
 
     <groupId>org.linkja</groupId>
     <artifactId>Matching</artifactId>
-    <version>0.1</version>
+    <version>1.1.0-beta</version>
 
     <properties>
         <main.runnable.class>org.linkja.matching.Runner</main.runnable.class>

@@ -5,7 +5,7 @@ import java.nio.file.FileSystems;
 
 public class DecryptFilesRunner {
   private static final String PROGRAM_NAME = "Linkja Matching - Decrypt Utility";
-  private static final String PROGRAM_VERSION = "1.0";
+  private static final String PROGRAM_VERSION = "v1.1.0-beta";
 
   public static void main(String[] args) {
     System.out.println(String.format("%s %s", PROGRAM_NAME, PROGRAM_VERSION));
