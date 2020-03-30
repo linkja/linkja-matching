@@ -35,7 +35,30 @@ public class DecryptFilesRunner {
         }
       }
     } catch (Exception e) {
-      System.out.println("Valid parameters: --directory, --prefix, --suffix, --decryptionKey");
+      printUsage();
+      System.exit(-1);
+    }
+
+    boolean invalidParameters = false;
+    if (dataFileDirectory.equals("")) {
+      System.out.println("You must specify a data file directory with --directory (e.g., --directory /Users/linkja/data)");
+      invalidParameters = true;
+    }
+    if (encryptedFilePrefix.equals("")) {
+      System.out.println("You must specify a prefix for the encrypted files with --prefix (e.g., --prefix TestProject-)");
+      invalidParameters = true;
+    }
+    if (encryptedFileSuffix.equals("")) {
+      System.out.println("You must specify a suffix for the encrypted files with --suffix (e.g., --suffix enc)");
+      invalidParameters = true;
+    }
+    if (decryptionKeyPath.equals("")) {
+      System.out.println("You must specify a path to your private RSA key with --decryptionKey (e.g., --decryptionKey test-project-priv.key)");
+      invalidParameters = true;
+    }
+
+    if (invalidParameters) {
+      printUsage();
       System.exit(-1);
     }
 
@@ -66,5 +89,9 @@ public class DecryptFilesRunner {
         exc.printStackTrace();
       }
     }
+  }
+
+  private static void printUsage() {
+    System.out.println("Valid parameters: --directory, --prefix, --suffix, --decryptionKey");
   }
 }
