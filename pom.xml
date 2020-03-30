@@ -22,6 +22,19 @@
         <javafx.version>11.0.1</javafx.version>
     </properties>
 
+    <repositories>
+      <repository>
+        <id>linkja-mvn-repo</id>
+        <url>https://raw.github.com/linkja/linkja-mvn-repo/master</url>
+        <releases>
+          <enabled>true</enabled>
+        </releases>
+        <snapshots>
+          <enabled>true</enabled>
+        </snapshots>
+      </repository>
+    </repositories>
+
     <dependencies>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
