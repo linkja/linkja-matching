@@ -1,1 +1,1 @@
-This is the folder where the liblinkjacrypto library should be placed.
+The linkja crypto library included with linkja-matching does not contaian the secret hash information used by other linkja programs and can be redistributed.
