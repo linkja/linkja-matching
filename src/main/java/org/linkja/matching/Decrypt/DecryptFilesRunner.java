@@ -75,6 +75,7 @@ public class DecryptFilesRunner {
     File privateKeyFile = new File(decryptionKeyPath);
     for (File file : fileList) {
       String printableFilePath = file.getAbsolutePath();
+      System.out.printf("Processing %s\r\n", printableFilePath);
       try {
         DecryptFiles.decrypt(file, privateKeyFile, encryptedFileSuffix);
       }
