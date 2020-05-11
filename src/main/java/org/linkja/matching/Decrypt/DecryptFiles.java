@@ -30,6 +30,8 @@ public class DecryptFiles {
 
       BufferedWriter writer = Files.newBufferedWriter(Paths.get(encryptedFile.getAbsolutePath().replace(encryptedFileSuffix, ".csv")));
       CSVPrinter csvPrinter = new CSVPrinter(writer, CSVFormat.DEFAULT);
+      csvPrinter.print("siteid");
+      csvPrinter.print("projectid");
 
       // Note that inputStream will have progressed as we read out the metadata.  At this point we can just read fixed-size
       // blocks from the input stream and begin the decryption process.  The assumption of course is that they represent
@@ -38,6 +40,7 @@ public class DecryptFiles {
       long readBlocks = 0;
       AesEncryptParameters encryptParameters = metadata.getEncryptParameters();
       boolean eof = false;
+      boolean headerRow = true;
       while (!eof) {
         byte[] data = new byte[AES_BLOCK_SIZE];
         int dataSize = inputStream.read(data, 0, AES_BLOCK_SIZE);
@@ -71,6 +74,12 @@ public class DecryptFiles {
 
         if (readBlocks % metadata.getNumHashColumns() == 0) {
           csvPrinter.println();
+
+          // When we start a new line, if we have more data to process we need to prefix it with the site ID and project ID
+          if (readBlocks < expectedBlocks) {
+            csvPrinter.print(metadata.getSiteId());
+            csvPrinter.print(metadata.getProjectId());
+          }
         }
       }
 

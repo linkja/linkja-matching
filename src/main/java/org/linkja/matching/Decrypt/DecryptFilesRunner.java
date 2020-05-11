@@ -2,6 +2,7 @@ package org.linkja.matching.Decrypt;
 
 import java.io.*;
 import java.nio.file.FileSystems;
+import java.nio.file.Paths;
 
 public class DecryptFilesRunner {
   private static final String PROGRAM_NAME = "Linkja Matching - Decrypt Utility";
@@ -13,7 +14,7 @@ public class DecryptFilesRunner {
     String dataFileDirectory = "";
     String encryptedFilePrefix = "";
     String encryptedFileSuffix = "";
-    String decryptionKeyPath = "";
+    String decryptionKeyName = "";
 
     try {
       for (int param = 0; param < args.length; ++param) {
@@ -31,7 +32,7 @@ public class DecryptFilesRunner {
           }
         } else if (args[param].equalsIgnoreCase("--decryptionKey") && args.length > param + 1) {
           param++;
-          decryptionKeyPath = args[param];
+          decryptionKeyName = args[param];
         }
       }
     } catch (Exception e) {
@@ -52,7 +53,7 @@ public class DecryptFilesRunner {
       System.out.println("You must specify a suffix for the encrypted files with --suffix (e.g., --suffix enc)");
       invalidParameters = true;
     }
-    if (decryptionKeyPath.equals("")) {
+    if (decryptionKeyName.equals("")) {
       System.out.println("You must specify a path to your private RSA key with --decryptionKey (e.g., --decryptionKey test-project-priv.key)");
       invalidParameters = true;
     }
@@ -62,17 +63,19 @@ public class DecryptFilesRunner {
       System.exit(-1);
     }
 
-    File directory = FileSystems.getDefault().getPath(dataFileDirectory).normalize().toAbsolutePath().toFile();
+    File projectDirectory = FileSystems.getDefault().getPath(dataFileDirectory).normalize().toAbsolutePath().toFile();
     String finalEncryptedFilePrefix = encryptedFilePrefix;
     String finalEncryptedFileSuffix = encryptedFileSuffix;
-    File[] fileList = directory.listFiles(new FilenameFilter() {
+    File inputDirectory = Paths.get(projectDirectory.getAbsolutePath(), "data", "input").toFile();
+
+    File[] fileList = inputDirectory.listFiles(new FilenameFilter() {
       @Override
       public boolean accept(File dir, String name) {
         return name.startsWith(finalEncryptedFilePrefix) && name.endsWith(finalEncryptedFileSuffix);
       }
     });
 
-    File privateKeyFile = new File(decryptionKeyPath);
+    File privateKeyFile = Paths.get(projectDirectory.getAbsolutePath(), decryptionKeyName).toFile();
     for (File file : fileList) {
       String printableFilePath = file.getAbsolutePath();
       System.out.printf("Processing %s\r\n", printableFilePath);
