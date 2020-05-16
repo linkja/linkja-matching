@@ -41,7 +41,7 @@ import org.sqlite.SQLiteException;
 public class GlobalMatchSqlite {
 
 	private static final String SW_NAME    = "Global Patient Match";
-	private static final String SW_VERSION = " v1.1.0.beta";
+	private static final String SW_VERSION = " v1.2.0.beta";
 	private static final String SQL_Exception1 = "SQLITE_BUSY";
 	//private static final String File_Extension_CSV = ".csv";
 	private static final String File_Extension_TXT = ".txt";
