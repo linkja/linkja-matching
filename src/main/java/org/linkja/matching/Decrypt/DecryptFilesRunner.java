@@ -6,7 +6,7 @@ import java.nio.file.Paths;
 
 public class DecryptFilesRunner {
   private static final String PROGRAM_NAME = "Linkja Matching - Decrypt Utility";
-  private static final String PROGRAM_VERSION = "v1.2.1-beta";
+  private static final String PROGRAM_VERSION = "v1.3";
 
   public static void main(String[] args) {
     System.out.println(String.format("%s %s", PROGRAM_NAME, PROGRAM_VERSION));

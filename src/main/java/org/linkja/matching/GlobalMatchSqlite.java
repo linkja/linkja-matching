@@ -1,3 +1,4 @@
+package org.linkja.matching;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -40,7 +41,7 @@ import org.sqlite.SQLiteException;
 public class GlobalMatchSqlite {
 
 	private static final String SW_NAME = "Global Patient Match";
-	private static final String SW_VERSION = " v1.1.beta";
+	private static final String SW_VERSION = " v1.3";
 	private static final String SQL_Exception1 = "SQLITE_BUSY";
 	//private static final String File_Extension_CSV = ".csv";
 	private static final String File_Extension_TXT = ".txt";
@@ -135,13 +136,13 @@ public class GlobalMatchSqlite {
 		// read configuration properties file from config subdirectory
 		configRootPath = changeDirectorySeparator(projectRoot); // change file separator if Windows
 		if (configRootPath.endsWith(directorySeparator)) {
-			configRootPath = configRootPath.substring(0, configRootPath.length() - 1); // remove last / 
+			configRootPath = configRootPath.substring(0, configRootPath.length() - 1); // remove last /
 		}
 		inputFileNamePrefix = "";
 		inputFileNameSuffix = "";
 		readConfig(configRootPath); // read config file and assign local variables
 
-		if (idSeed > 0) { // if user value passed in, override config global id seed 
+		if (idSeed > 0) { // if user value passed in, override config global id seed
 			atomicIntegerSeed = idSeed;
 			globalId = new AtomicInteger(atomicIntegerSeed); // set base Global id
 		}
@@ -225,7 +226,7 @@ public class GlobalMatchSqlite {
 
 		for (int i = 0; i < inputFiles.size(); i++) {
 
-			fullName = inputFiles.get(i); // get next file in list				
+			fullName = inputFiles.get(i); // get next file in list
 			fullName = changeDirectorySeparator(fullName); // change file separator if Windows
 			String inputFile1 = fullName;
 			String invalidDataFile = changeFileExtension(inputFile1, "bad");
@@ -242,7 +243,7 @@ public class GlobalMatchSqlite {
 
 			File fileIn = new File(inputFile1);
 			try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(fileIn), "UTF-8"))) {
-				final int batchSize = 1000; // number of records stored before commits	
+				final int batchSize = 1000; // number of records stored before commits
 				recordsRead = 0;
 
 				String line = null;
@@ -557,7 +558,7 @@ public class GlobalMatchSqlite {
 	/*  Exclusion patients not transferred to avoid complications in matching
 	public void transferExclusionPatients() {
 		int count = 0;
-		String sql1 = 		
+		String sql1 =
 		"INSERT INTO GlobalMatch (globalId,siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion) "+
 		"SELECT globalId,siteId,projectId,pidhash,hash1,hash2,hash3,hash4,hash5,hash6,hash7,hash8,hash9,hash10,exclusion FROM ExclusionPatients";
 		try ( PreparedStatement pstmt1 = db.prepareStatement(sql1)) {
@@ -738,7 +739,7 @@ public class GlobalMatchSqlite {
 				}
 			}
 			Integer maxGlobalId = 0;
-			String sql1 = "SELECT globalId FROM GlobalMatch WHERE id IN (" + sb1.toString() + ")"; // create sql 
+			String sql1 = "SELECT globalId FROM GlobalMatch WHERE id IN (" + sb1.toString() + ")"; // create sql
 			try (PreparedStatement pstmt1 = db.prepareStatement(sql1)) { // check if any already have global id
 				pstmt1.setFetchSize(100); //number of rows to be fetched when needed
 				ResultSet resultSet = pstmt1.executeQuery();
@@ -803,7 +804,7 @@ public class GlobalMatchSqlite {
 				try (PreparedStatement pstmt2 = db.prepareStatement(sql2)) {
 					pstmt2.setInt(1, nextGlobalId); // set corresponding params
 					pstmt2.setInt(2, num);
-					pstmt2.executeUpdate(); // update this record 
+					pstmt2.executeUpdate(); // update this record
 
 					commitCount++;
 					if (commitCount % batchSize == 0) {
@@ -851,7 +852,7 @@ public class GlobalMatchSqlite {
 		try (PreparedStatement pstmt1 = db.prepareStatement(sql3)) {
 			pstmt1.setFetchSize(1000); //number of rows to be fetched when needed
 			ResultSet resultSet = pstmt1.executeQuery();
-			while (resultSet.next()) { // get row ids of unassigned patients, save to temp 
+			while (resultSet.next()) { // get row ids of unassigned patients, save to temp
 				Integer rowId = resultSet.getInt("id");
 				Integer nextGlobalId = globalId.incrementAndGet(); // assign next global id
 				storeToTempTableIdKey(rowId, nextGlobalId); // save to temp file
@@ -886,7 +887,7 @@ public class GlobalMatchSqlite {
 				+ " WHERE GlobalMatch.globalId = 0";
 
 		try (PreparedStatement pstmt2 = db.prepareStatement(sql2)) {
-			pstmt2.executeUpdate(); // update GlobalMatch record from temp table 
+			pstmt2.executeUpdate(); // update GlobalMatch record from temp table
 		} catch (SQLException e) {
 			System.out.println(e.getMessage());
 			if (e.getMessage().contains(SQL_Exception1)) {
@@ -958,7 +959,7 @@ public class GlobalMatchSqlite {
 				pstmt2.setString(2, keyPart[0]); // set pid
 				pstmt2.setString(3, keyPart[1]); // set site id
 				pstmt2.setString(4, keyPart[2]); // set project id
-				pstmt2.executeUpdate(); // update these record 
+				pstmt2.executeUpdate(); // update these record
 			} catch (SQLException e) {
 				System.out.println(e.getMessage());
 				if (e.getMessage().contains(SQL_Exception1)) {
@@ -1106,7 +1107,7 @@ public class GlobalMatchSqlite {
 			}
 			Set<Integer> updatePatSet = patGlobalIdMap.get(linkId); // get existing pat set map entry
 			nextPatSet.addAll(addPatSet); // add pats to be moved, removes duplicates
-			updatePatSet.addAll(nextPatSet); // add all pats in incoming set, removes duplicates 
+			updatePatSet.addAll(nextPatSet); // add all pats in incoming set, removes duplicates
 			patGlobalIdMap.put(linkId, updatePatSet); // save updated set back into same map location
 			savePatGlobalIdMapLink(linkId, nextPatSet); // save map link for all pats in incoming set
 		}
@@ -1323,7 +1324,7 @@ public class GlobalMatchSqlite {
 		}
 
 		// query database
-		String sqlQuery = "SELECT hash1,id " // must have all fields in index 
+		String sqlQuery = "SELECT hash1,id " // must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match3"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1393,7 +1394,7 @@ public class GlobalMatchSqlite {
 		}
 		createTempTableAllKey(); // go create and populate temp table to hold pats to compare
 
-		String sqlQuery = "SELECT hash1,hash2,id " // query database, must have all fields in index 
+		String sqlQuery = "SELECT hash1,hash2,id " // query database, must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match4"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1451,7 +1452,7 @@ public class GlobalMatchSqlite {
 		}
 		createTempTableAllKey(); // go create and populate temp table to hold pats to compare
 
-		String sqlQuery = "SELECT hash1,hash5,id " // query database, must have all fields in index 
+		String sqlQuery = "SELECT hash1,hash5,id " // query database, must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match5"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1509,7 +1510,7 @@ public class GlobalMatchSqlite {
 		}
 		createTempTableAllKey(); // go create and populate temp table to hold pats to compare
 
-		String sqlQuery = "SELECT hash1,hash9,id " // query database, must have all fields in index 
+		String sqlQuery = "SELECT hash1,hash9,id " // query database, must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match6"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1567,7 +1568,7 @@ public class GlobalMatchSqlite {
 		}
 		createTempTableAllKey(); // go create and populate temp table to hold pats to compare
 
-		String sqlQuery = "SELECT hash1,hash10,id " // query database, must have all fields in index 
+		String sqlQuery = "SELECT hash1,hash10,id " // query database, must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match7"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1631,7 +1632,7 @@ public class GlobalMatchSqlite {
 		}
 
 		// query database
-		String sqlQuery = "SELECT hash3,id " // must have all fields in index 
+		String sqlQuery = "SELECT hash3,id " // must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match8"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1651,7 +1652,7 @@ public class GlobalMatchSqlite {
 					if (!lastMatch) {
 						currGlobalIdGroup.add(lastRowId); //if match and not last match add both to set
 						currGlobalIdGroup.add(currRowId);
-						//matchSet.add(currPat);						
+						//matchSet.add(currPat);
 					} else {
 						currGlobalIdGroup.add(currRowId); // else matched before so lastPat already included
 					}
@@ -1699,7 +1700,7 @@ public class GlobalMatchSqlite {
 		}
 		createTempTableAllKey(); // go create and populate temp table to hold pats to compare
 
-		String sqlQuery = "SELECT hash3,hash4,id " // query database, must have all fields in index 
+		String sqlQuery = "SELECT hash3,hash4,id " // query database, must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match9"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1757,7 +1758,7 @@ public class GlobalMatchSqlite {
 		}
 		createTempTableAllKey(); // go create and populate temp table to hold pats to compare
 
-		String sqlQuery = "SELECT hash3,hash6,id " // query database, must have all fields in index 
+		String sqlQuery = "SELECT hash3,hash6,id " // query database, must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match10"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1821,7 +1822,7 @@ public class GlobalMatchSqlite {
 		}
 
 		// query database
-		String sqlQuery = "SELECT hash7,id " // must have all fields in index 
+		String sqlQuery = "SELECT hash7,id " // must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match11"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1841,7 +1842,7 @@ public class GlobalMatchSqlite {
 					if (!lastMatch) {
 						currGlobalIdGroup.add(lastRowId); //if match and not last match add both to set
 						currGlobalIdGroup.add(currRowId);
-						//matchSet.add(currPat);						
+						//matchSet.add(currPat);
 					} else {
 						currGlobalIdGroup.add(currRowId); // else matched before so lastPat already included
 					}
@@ -1895,7 +1896,7 @@ public class GlobalMatchSqlite {
 		}
 
 		// query database
-		String sqlQuery = "SELECT hash8,id " // must have all fields in index 
+		String sqlQuery = "SELECT hash8,id " // must have all fields in index
 				+ "FROM GlobalMatch INDEXED BY match12"; // create prepared statement
 		try (PreparedStatement pstmt = db.prepareStatement(sqlQuery)) {
 			pstmt.setFetchSize(1000); //number of rows to be fetched when needed
@@ -1915,7 +1916,7 @@ public class GlobalMatchSqlite {
 					if (!lastMatch) {
 						currGlobalIdGroup.add(lastRowId); //if match and not last match add both to set
 						currGlobalIdGroup.add(currRowId);
-						//matchSet.add(currPat);						
+						//matchSet.add(currPat);
 					} else {
 						currGlobalIdGroup.add(currRowId); // else matched before so lastPat already included
 					}
@@ -2055,7 +2056,7 @@ public class GlobalMatchSqlite {
 
 		fileToMoveName = changeDirectorySeparator(fileToMoveName);
 		fileToMoveNameOnly = getFileExtension(fileToMoveName);
-		fileNewLocName = makeFilePath(processedFilesDirectory, fileToMoveNameOnly); // indicate new location	
+		fileNewLocName = makeFilePath(processedFilesDirectory, fileToMoveNameOnly); // indicate new location
 		File fileToMove = FileUtils.getFile(fileToMoveName);
 		File fileNewLoc = FileUtils.getFile(fileNewLocName);
 		if (!fileToMove.exists()) {
@@ -2495,7 +2496,7 @@ public class GlobalMatchSqlite {
 		//configRootPath = System.getenv("GLOBAL_MATCH_BASE");		// read root dir from System environment variable
 		configRootPath = configRootPath.replaceAll("\\\\", directorySeparator); // change dir separator if Windows
 		if (configRootPath.endsWith(directorySeparator)) {
-			configRootPath = configRootPath.substring(0, configRootPath.length() - 1); // remove last / 
+			configRootPath = configRootPath.substring(0, configRootPath.length() - 1); // remove last /
 		}
 		System.out.println("GLOBAL_MATCH_BASE directory: " + configRootPath);
 		GlobalMatchSqlite gms = new GlobalMatchSqlite(configRootPath, tempAtomicIntegerSeed); //create instance
@@ -2509,7 +2510,7 @@ public class GlobalMatchSqlite {
 			}
 		}
 
-		if (tempAtomicIntegerSeed > 0) { // if user value passed in, override config global id seed 
+		if (tempAtomicIntegerSeed > 0) { // if user value passed in, override config global id seed
 			atomicIntegerSeed = tempAtomicIntegerSeed;
 			globalId = new AtomicInteger(atomicIntegerSeed); // set base Global id
 		}
@@ -2527,7 +2528,7 @@ public class GlobalMatchSqlite {
 		gms.writeAtomicIntegerSeed(); // go save current value of next globalId
 		if (db != null) {
 			try {
-				db.close(); // close database					
+				db.close(); // close database
 			} catch (SQLException e) {
 				/* ignored */}
 		}
