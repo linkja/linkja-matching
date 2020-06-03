@@ -13,8 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 public class DecryptFiles {
-  private static final int AES_TAG_SIZE = 16;
-  private static final int AES_BLOCK_SIZE = 128;
+  private static final int HASH_BLOCK_SIZE = 64;  // 32 bytes per SHA-256, x2 as byte representation
 
   public static void decrypt(File encryptedFile, File privateKeyFile, String encryptedFileSuffix) throws LinkjaException, IOException {
       String printableFilePath = encryptedFile.getAbsolutePath();
@@ -32,26 +31,30 @@ public class DecryptFiles {
       CSVPrinter csvPrinter = new CSVPrinter(writer, CSVFormat.DEFAULT);
       csvPrinter.print("siteid");
       csvPrinter.print("projectid");
+      csvPrinter.print("PIDHASH");
+
+      int numHashColumns = metadata.getNumHashColumns();
+      for (int columnCounter = 1; columnCounter <= (numHashColumns - 1); columnCounter++) {
+        csvPrinter.print(String.format("hash%d", columnCounter));
+      }
+      csvPrinter.println();
+
+      // Write out the site ID and project ID
+      csvPrinter.print(metadata.getSiteId().trim());
+      csvPrinter.print(metadata.getProjectId().trim());
 
       // Note that inputStream will have progressed as we read out the metadata.  At this point we can just read fixed-size
       // blocks from the input stream and begin the decryption process.  The assumption of course is that they represent
-      // the full AES encrypted block.
+      // the full SHA-256 block.
       long expectedBlocks = metadata.getNumHashColumns() * metadata.getNumHashRows();
       long readBlocks = 0;
-      AesEncryptParameters encryptParameters = metadata.getEncryptParameters();
+      long rowCounter = 1;
+      int tokenCounter = 1;
       boolean eof = false;
-      boolean headerRow = true;
       while (!eof) {
-        byte[] data = new byte[AES_BLOCK_SIZE];
-        int dataSize = inputStream.read(data, 0, AES_BLOCK_SIZE);
-        if (dataSize != AES_BLOCK_SIZE) {
-          eof = true;
-          continue;
-        }
-
-        byte[] tag = new byte[AES_TAG_SIZE];
-        int tagSize = inputStream.read(tag, 0, AES_TAG_SIZE);
-        if (tagSize != AES_TAG_SIZE) {
+        byte[] data = new byte[HASH_BLOCK_SIZE];
+        int dataSize = inputStream.read(data, 0, HASH_BLOCK_SIZE);
+        if (dataSize != HASH_BLOCK_SIZE) {
           eof = true;
           continue;
         }
@@ -60,25 +63,25 @@ public class DecryptFiles {
 
         // If both the tag and data start with 0s, that indicates they are empty blocks and that this particular hash
         // is empty.  We will skip trying to decrypt it.
-        if (tag[0] == 0x00 && data[0] == 0x00) {
+        if (data[0] == 0x00) {
           csvPrinter.print("");
         }
         else {
-          AesResult decryptResult = Library.aesDecrypt(data, encryptParameters.getAad(), encryptParameters.getKey(), encryptParameters.getIv(), tag);
-          if (decryptResult == null || decryptResult.data == null) {
-            throw new LinkjaException("There was an error when trying to decrypt one of the hash records.");
-          }
-
-          csvPrinter.print(new String(decryptResult.data));
+          csvPrinter.print(Library.revertSecureHash(
+            new String(data), metadata.getSessionKey(), Long.toString(rowCounter), Integer.toString(tokenCounter)).toUpperCase());
         }
 
-        if (readBlocks % metadata.getNumHashColumns() == 0) {
+        tokenCounter++;
+
+        if (readBlocks % numHashColumns == 0) {
+          rowCounter++;      // Progress to the next row
+          tokenCounter = 1;  // Reset to start over
           csvPrinter.println();
 
           // When we start a new line, if we have more data to process we need to prefix it with the site ID and project ID
           if (readBlocks < expectedBlocks) {
-            csvPrinter.print(metadata.getSiteId());
-            csvPrinter.print(metadata.getProjectId());
+            csvPrinter.print(metadata.getSiteId().trim());
+            csvPrinter.print(metadata.getProjectId().trim());
           }
         }
       }
